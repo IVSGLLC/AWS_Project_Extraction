@@ -1,0 +1,152 @@
+import datetime
+import gzip
+import random
+import boto3
+from EPDE_Logging import LogManger
+from decimal import Decimal
+from EPDE_Error import ErrorHandler
+import string
+
+#This Class  is responsible to handle Post payment operation
+class SecurityManager(object):
+    logger=LogManger()
+    err_handler=ErrorHandler()
+    region='us-east-1'
+    table_Per_Store=1
+    def __init__(self,region):  
+        SecurityManager.region=region        
+    def __get_string_size_in_bytes(self, message_body):
+       return len(message_body.encode('utf-8'))
+    
+    def __is_large(self, message):     
+        msg_body_size = self.__get_string_size_in_bytes(self,message_body=str(message))
+        return (msg_body_size >= 400000)
+
+    @classmethod     
+    def GetTableName(self,store_code):
+        TableName="EPDE_SECURITY_QUESTION"      
+       
+        return TableName
+    @classmethod
+    def GetQuestionEntry(self,store_code,fileId):
+        try:
+            _moduleNM="SecurityManager"
+            _functionNM="GetQuestionEntry"
+            self.logger.debug("GetQuestionEntry>> store_code="+str(store_code)+",fileId="+str(fileId))
+            dynamodb = boto3.resource('dynamodb', region_name=SecurityManager.region)
+            TableName=self.GetTableName(store_code)
+            table = dynamodb.Table(TableName)
+            response = table.get_item(Key={'file_id': fileId},ConsistentRead=True)
+            try:
+                item = response['Item']
+                if 'question' in item:
+                    item['question']=self.readLargeData(data=item['question'])
+                if 'answer' in item:
+                    item['answer']=self.readLargeData(data=item['answer'])                    
+                return { "status":True,"item": item } 
+            except KeyError as kerr:         
+               return self.err_handler.HandleAppError(356,moduleNM=_moduleNM,functionNM=_functionNM)   
+        except Exception as e:
+               return self.err_handler.HandleGeneralError(moduleNM=_moduleNM,functionNM=_functionNM)
+    @classmethod
+    def writeLargeData(self,data):
+        if data is None or len(data)==0 :
+            return data
+        if self.__is_large(self,message=str(data)):
+           byte_data = str.encode(str(data))  
+           compressed_data = gzip.compress(byte_data)  
+           payLoad= {"EPDELargePayload":compressed_data}
+           return payLoad          
+        else:
+            return data     
+          
+    @classmethod
+    def readLargeData(self,data):
+        if data is None or len(data)==0 :
+            return data
+        if isinstance(data, (str)):   
+            return data               
+        large_pay_load_attribute_value = data.get('EPDELargePayload',None)
+        if large_pay_load_attribute_value:
+            compressed_data= data.get('EPDELargePayload',None)
+            decompressed_data = gzip.decompress(compressed_data)  
+            if isinstance(decompressed_data, (bytes, bytearray)):
+                decompressed_data=decompressed_data.decode()   
+        else:
+            decompressed_data=data
+        return decompressed_data 
+
+   
+    @classmethod
+    def SaveQuestion(self,post_data):  
+        _moduleNM="SecurityManager"
+        _functionNM="SaveQuestion"
+        try:             
+            issued = datetime.datetime.now()
+            req_ts = issued.timestamp()
+            create_date = issued.strftime("%Y-%m-%d")
+            isUpdate=False      
+            self.logger.debug("SaveQuestion >table_Per_Store="+str(SecurityManager.table_Per_Store)) 
+            dynamodb = boto3.resource('dynamodb', region_name=SecurityManager.region)         
+            TableName=self.GetTableName(post_data['dealerCode'])
+            table = dynamodb.Table(TableName)    
+            fileId=self.GetFileId()        
+            with table.batch_writer(overwrite_by_pkeys=[ 'file_id']) as batch:
+                batch.put_item(
+                                Item={
+                                "file_id": str(self.GetFileId()),
+                                "store_code": str(post_data['dealerCode']),                               
+                                "question": str(post_data['data']),
+                                "answer": str(""),
+                                "status": str("N"),
+                                "create_date" :str(create_date),
+                                "req_ts":  req_ts,
+                                "res_time":req_ts,
+                                "fileName":post_data['fileName']                                         
+                                }
+                            )
+            if isUpdate==False:
+                self.logger.debug("SaveQuestion Question Created file_id:"+fileId+",status:"+status)
+            return { "status":True,"file_id": fileId}          
+        except Exception as e:
+            return self.err_handler.HandleGeneralError(moduleNM=_moduleNM,functionNM=_functionNM)
+    @classmethod
+    def GetFileId(self):
+        # initializing size of string 
+        N = 10        
+        # using random.choices()
+        # generating random strings 
+        res = ''.join(random.choices(string.ascii_uppercase +
+                                    string.digits, k = N))
+        return res       
+          
+    @classmethod
+    def UpdateQuestion(self,store_code,fileId,status,answer):
+        _moduleNM="SecurityManager"
+        _functionNM="UpdateQuestion"
+        ct = datetime.datetime.now()
+        res_ts = ct.timestamp()
+        try:
+            self.logger.debug("UpdateQuestion>> store_code="+str(store_code)+",ques_status:"+ques_status+",fileId:"+fileId)
+            dynamodb = boto3.resource('dynamodb', region_name=SecurityManager.region)
+            TableName=self.GetTableName(store_code)
+            table = dynamodb.Table(TableName)
+            response = table.update_item(
+                            Key={
+                                'file_id': fileId
+                            },
+                            UpdateExpression="set res_time=:ut,status=:ros,answer=:rspj",
+                            ExpressionAttributeValues={
+                                ':ut': str(res_ts),
+                                ':ros': str(status),
+                                ':rspj':self.writeLargeData(answer)                          
+                            },
+                            ReturnValues="UPDATED"         
+                        )
+            #self.logger.debug("response:"+str(response))
+            return { "status":True }             
+        except Exception as e:
+            return self.err_handler.HandleGeneralError(moduleNM=_moduleNM,functionNM=_functionNM)
+    
+     
+    
