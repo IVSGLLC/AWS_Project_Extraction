@@ -203,8 +203,7 @@ class Inventory(object):
             items=[]
             fetchAll=False
             starttime = datetime.now()
-            if last_key and page_size>0:
-                
+            if last_key and page_size>0:                
                 try:
                     key1=json.loads(last_key)
                 except  Exception as e:
@@ -217,17 +216,17 @@ class Inventory(object):
                     LastEvaluatedKey=response['LastEvaluatedKey']   
             else:
                 if last_key:
-                   try:
-                        key1=json.loads(last_key)
-                   except  Exception as e:
-                        sq=urllib.parse.unquote(last_key)
-                        key1 = json.loads(str(sq)) 
+                    try:
+                            key1=json.loads(last_key)
+                    except  Exception as e:
+                            sq=urllib.parse.unquote(last_key)
+                            key1 = json.loads(str(sq)) 
 
-                   response = table.query(
-                     KeyConditionExpression= Key('document_type').eq(document_type),
-                     ConsistentRead=False, ExclusiveStartKey=key1)
-                   if 'LastEvaluatedKey' in response:
-                       LastEvaluatedKey=response['LastEvaluatedKey']  
+                    response = table.query(
+                        KeyConditionExpression= Key('document_type').eq(document_type),
+                        ConsistentRead=False, ExclusiveStartKey=key1)
+                    if 'LastEvaluatedKey' in response:
+                        LastEvaluatedKey=response['LastEvaluatedKey']  
                 elif page_size>0:
                    response = table.query(
                      KeyConditionExpression= Key('document_type').eq(document_type),

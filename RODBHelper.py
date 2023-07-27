@@ -541,15 +541,20 @@ class RODBHelper():
                         if "modelYear" in vehicle:
                             year=vehicle["modelYear"]
                 
-                customer_middle_name=""
-                customer_name=""
+               
+                personName=""
                 customer_id=''
+                customer_name=""
                 customer_first_name=''
+                customer_middle_name=""
                 customer_last_name=''              
                 customer_email=""
                 mobilePhone=""
                 contactPhone=""
-                homePhone=""               
+                homePhone=""  
+                workPhone=""
+                otherPhone=""
+                faxPhone=""          
                 lineOne=""
                 lineTwo=""
                 stateOrProvision=""
@@ -564,133 +569,12 @@ class RODBHelper():
                 employee_middle_name=""
                 
                 companyName=""
+                customerParty=None
                 if 'repairOrderParties' in row and len(row["repairOrderParties"])>0:
-                    for repairOrderParty in row['repairOrderParties']:
-                        if 'customerTypeCode' in repairOrderParty and  repairOrderParty['customerTypeCode'] == 'Business': 
-                            if 'companyName' in repairOrderParty:                        
-                                companyName= repairOrderParty["companyName"]
-                            if 'personName' in repairOrderParty:                        
-                                customer_name= repairOrderParty["personName"]
-                            if 'middleName' in repairOrderParty:                        
-                                customer_middle_name= repairOrderParty["middleName"] 
-                            if 'givenName' in repairOrderParty:                        
-                                customer_first_name= repairOrderParty["givenName"]                             
-                            if 'familyName' in repairOrderParty:
-                                customer_last_name= repairOrderParty["familyName"]                              
-                            if 'idList' in repairOrderParty and len(repairOrderParty["idList"])>0:  
-                                idList=repairOrderParty['idList']                                  
-                                for id in idList:
-                                    if 'typeId' in id and 'id' in id and id['typeId'] == 'Other': 
-                                        customer_id= id["id"]       
-                            if 'primaryContact' in repairOrderParty:  
-                                primaryContact=   repairOrderParty['primaryContact']
-                                if 'personName' in repairOrderParty:                        
-                                    customer_name= repairOrderParty["personName"]
-                                if 'address' in primaryContact:  
-                                    for address in primaryContact["address"]:
-                                        if "addressType" in address:
-                                            addressType=address['addressType']
-                                        if "lineOne" in address:
-                                            lineOne=address['lineOne']
-                                        if "lineTwo" in address:
-                                            lineTwo=address['lineTwo']
-                                        if "lineThree" in address and address['lineThree'] is not None and len(address['lineThree'])>0 :
-                                                if len(lineTwo)>0:
-                                                    lineTwo=lineTwo+'\n'+address['lineThree']
-                                                else:
-                                                    lineTwo= address['lineThree']                                        
-                                        if "lineFour" in address and address['lineFour'] is not None and  len(address['lineFour'])>0 :
-                                                if len(lineTwo)>0:
-                                                    lineTwo=lineTwo+'\n'+address['lineFour']
-                                                else:
-                                                    lineTwo= address['lineFour']
-                                        if "cityName" in address:
-                                            cityName=address["cityName"]
-                                        if "postCode" in address:
-                                            postCode=address["postCode"]
-                                        if "stateOrProvinceCountrySubDivisionId" in address:
-                                            stateOrProvision=address["stateOrProvinceCountrySubDivisionId"]
-                                        if "countryId" in address:    
-                                                country=address["countryId"]
-                                         
-                                        break
-                                                   
-                                if "communication" in primaryContact :
-                                    for communication in primaryContact['communication']:
-                                        if 'channelType' in communication: 
-                                            channelType=communication['channelType']
-                                            #primaryIndicator=communication['primaryIndicator']
-                                            if 'channelCode' in communication:
-                                                channelCode=communication['channelCode']
-                                                if channelType=="Phone":
-                                                    if channelCode=="Cell"  and 'completeNumber' in communication:
-                                                        mobilePhone=communication['completeNumber']
-                                                    if channelCode=="Home"  and 'completeNumber' in communication:
-                                                        homePhone=communication['completeNumber']
-                                                    if channelCode=="Work"  and 'completeNumber' in communication:
-                                                        contactPhone=communication['completeNumber']
-                                            if channelType=="Email" and 'emailAddress' in communication:
-                                                customer_email=communication['emailAddress']     
-
-                        else:
-                            if 'partyType' in repairOrderParty and  repairOrderParty['partyType'] == 'OwnerParty': 
-                                if 'personName' in repairOrderParty:                        
-                                    customer_name= repairOrderParty["personName"]
-                                if 'middleName' in repairOrderParty:                        
-                                    customer_middle_name= repairOrderParty["middleName"] 
-                                if 'givenName' in repairOrderParty:                        
-                                    customer_first_name= repairOrderParty["givenName"]                             
-                                if 'familyName' in repairOrderParty:
-                                    customer_last_name= repairOrderParty["familyName"] 
-                                if 'idList' in repairOrderParty and len(repairOrderParty["idList"])>0:  
-                                    idList=repairOrderParty['idList']                                  
-                                    for id in idList:
-                                        if 'typeId' in id and 'id' in id and id['typeId'] == 'Other': 
-                                            customer_id= id["id"]                           
-                                if "communication" in repairOrderParty :
-                                    for communication in repairOrderParty['communication']:
-                                            if 'channelType' in communication: 
-                                                channelType=communication['channelType']
-                                                #primaryIndicator=communication['primaryIndicator']
-                                                if 'channelCode' in communication:
-                                                    channelCode=communication['channelCode']
-                                                    if channelType=="Phone":
-                                                        if channelCode=="Cell" and 'completeNumber' in communication:
-                                                            mobilePhone=communication['completeNumber']
-                                                        if channelCode=="Home" and 'completeNumber' in communication:
-                                                            homePhone=communication['completeNumber']
-                                                        if channelCode=="Work" and 'completeNumber' in communication:
-                                                            contactPhone=communication['completeNumber']
-
-                                                if channelType=="Email" and 'emailAddress' in communication:
-                                                    customer_email=communication['emailAddress']
-                                if "address" in repairOrderParty:
-                                        for address in repairOrderParty["address"]:
-                                            #primaryIndicator=address['primaryIndicator']
-                                            if "lineOne" in address:
-                                                lineOne=address['lineOne']
-                                            if "lineTwo" in address:
-                                                lineTwo=address['lineTwo']
-                                            if "lineThree" in address and address['lineThree'] is not None and len(address['lineThree'])>0 :
-                                                if len(lineTwo)>0:
-                                                    lineTwo=lineTwo+'\n'+address['lineThree']
-                                                else:
-                                                    lineTwo= address['lineThree']                                        
-                                            if "lineFour" in address and address['lineFour'] is not None and  len(address['lineFour'])>0 :
-                                                if len(lineTwo)>0:
-                                                    lineTwo=lineTwo+'\n'+address['lineFour']
-                                                else:
-                                                    lineTwo= address['lineFour']
-                                            if "cityName" in address:
-                                                cityName=address["cityName"]
-                                            if "postCode" in address:
-                                                postCode=address["postCode"]
-                                            if "stateOrProvinceCountrySubDivisionId" in address:
-                                                stateOrProvision=address["stateOrProvinceCountrySubDivisionId"]
-                                            if "countryId" in address:    
-                                                country=address["countryId"]
-                                            break
-
+                    for repairOrderParty in row['repairOrderParties']:                        
+                        if 'partyType' in repairOrderParty and  repairOrderParty['partyType'] == 'OwnerParty': 
+                            customerParty=self.ExtractPartyDetail(repairOrderParty)   
+            
                         if 'partyType' in repairOrderParty and repairOrderParty['partyType'] == 'ServiceAdvisorParty':
                             if 'personName' in repairOrderParty:                        
                                 employee_name= repairOrderParty["personName"]
@@ -705,13 +589,143 @@ class RODBHelper():
                                 for id in idList:
                                     if 'typeId' in id and 'id' in id and id['typeId'] == 'DMSId':  
                                        employee_id= id["id"]
+                
+                #End RepairOrderParties extract
+                resdenceAddress=None
+                billAddress=None
+                mailAddress=None
+                previousAddress=None
+                shipAddress=None
+                if customerParty is not None:
+                    if 'partyId' in customerParty and customerParty['partyId'] is not None:
+                        customer_id=customerParty['partyId']
 
-                        
+                    if 'partyDetail' in customerParty and customerParty['partyDetail'] is not None:
+                        partyDetail=customerParty['partyDetail']
+                        if partyDetail is not None:
+                            customer_first_name= partyDetail['firstName']
+                            customer_middle_name=partyDetail['middleName']
+                            customer_last_name= partyDetail['lastName']
+                            companyName=partyDetail['companyName']
+                            personName=partyDetail['personName']
+                            customer_name=personName
+                            if (customer_first_name is None or customer_first_name=="") and (customer_last_name is None or customer_last_name==""):
+                                if companyName is not None and companyName!="":
+                                    customer_last_name= companyName
+                                if personName is not None and personName!="":
+                                  nameArray= personName.split() 
+                                  if nameArray is not None and len(nameArray)==1:                                 
+                                    customer_last_name=nameArray[0]
+                                  if nameArray is not None and len(nameArray)==2:                                   
+                                    customer_first_name=nameArray[0]
+                                    customer_last_name=nameArray[1]
+                                  if nameArray is not None and len(nameArray)==2:                                   
+                                    customer_first_name=nameArray[0]                                    
+                                    customer_middle_name=nameArray[1]  
+                                    customer_last_name=nameArray[2]
+                            homePhone=partyDetail['homePhone']
+                            mobilePhone=partyDetail['mobilePhone']
+                            workPhone=partyDetail['workPhone']
+                            otherPhone=partyDetail['otherPhone']
+                            faxPhone=partyDetail['faxPhone']
+                            customer_email=partyDetail['emailAddress']
+                            addressGroups=partyDetail['addressGroups'] 
+                            if addressGroups is not None and 'Residence' in addressGroups :
+                                resdenceAddress=addressGroups['Residence']
+                            if addressGroups is not None and 'Billing' in addressGroups :
+                                billAddress=addressGroups['Billing']
+                            if addressGroups is not None and 'Mail' in addressGroups :
+                                mailAddress=addressGroups['Mail']
+                            if addressGroups is not None and 'Shipping' in addressGroups :
+                                shipAddress=addressGroups['Shipping']
+                            if addressGroups is not None and 'Previous' in addressGroups :
+                                previousAddress=addressGroups['Previous']
+                            
+                        if 'primaryContact' in customerParty and customerParty['primaryContact'] is not None:
+                            primaryContact=customerParty['primaryContact']
+                            homePhone=primaryContact['homePhone']
+                            mobilePhone=primaryContact['mobilePhone']
+                            workPhone=primaryContact['workPhone']
+                            otherPhone=primaryContact['otherPhone']
+                            faxPhone=primaryContact['faxPhone']
+                            customer_email=primaryContact['emailAddress']
+                            addressGroups=primaryContact['addressGroups'] 
+                            if addressGroups is not None and 'Residence' in addressGroups :
+                                resdenceAddress=addressGroups['Residence']
+                            if addressGroups is not None and 'Billing' in addressGroups :
+                                billAddress=addressGroups['Billing']
+                            if addressGroups is not None and 'Mail' in addressGroups :
+                                mailAddress=addressGroups['Mail']
+                            if addressGroups is not None and 'Shipping' in addressGroups :
+                                shipAddress=addressGroups['Shipping']
+                            if addressGroups is not None and 'Previous' in addressGroups :
+                                previousAddress=addressGroups['Previous']
+                        if 'addressGroups' in customerParty and customerParty['addressGroups'] is not None:
+                            addressGroups=customerParty['addressGroups'] 
+                            if addressGroups is not None and 'Residence' in addressGroups :
+                                resdenceAddress=addressGroups['Residence']
+                            if addressGroups is not None and 'Billing' in addressGroups :
+                                billAddress=addressGroups['Billing']
+                            if addressGroups is not None and 'Mail' in addressGroups :
+                                mailAddress=addressGroups['Mail']
+                            if addressGroups is not None and 'Shipping' in addressGroups :
+                                shipAddress=addressGroups['Shipping']  
+                            if addressGroups is not None and 'Previous' in addressGroups :
+                                previousAddress=addressGroups['Previous']      
+                addressFound=False
+                if resdenceAddress is not None:
+                    addressFound=True
+                    custAddress=self.prePareAddress(resdenceAddress)
+                    lineOne=custAddress["customer_addresses_addressline"] 
+                    lineTwo=custAddress["customer_addresses_addressline1"] 
+                    cityName=custAddress["customer_addresses_city"] 
+                    stateOrProvision=custAddress["customer_addresses_state"] 
+                    postCode=custAddress["customer_addresses_zip"] 
+                    country=custAddress["customer_addresses_country"] 
+                if addressFound == False and mailAddress is not None:
+                    custAddress=self.prePareAddress(mailAddress)
+                    lineOne=custAddress["customer_addresses_addressline"] 
+                    lineTwo=custAddress["customer_addresses_addressline1"] 
+                    cityName=custAddress["customer_addresses_city"] 
+                    stateOrProvision=custAddress["customer_addresses_state"] 
+                    postCode=custAddress["customer_addresses_zip"] 
+                    country=custAddress["customer_addresses_country"]      
+                if addressFound == False and billAddress is not None:
+                    custAddress=self.prePareAddress(billAddress)
+                    lineOne=custAddress["customer_addresses_addressline"] 
+                    lineTwo=custAddress["customer_addresses_addressline1"] 
+                    cityName=custAddress["customer_addresses_city"] 
+                    stateOrProvision=custAddress["customer_addresses_state"] 
+                    postCode=custAddress["customer_addresses_zip"] 
+                    country=custAddress["customer_addresses_country"]      
+                if addressFound == False and shipAddress is not None:
+                    custAddress=self.prePareAddress(shipAddress)
+                    lineOne=custAddress["customer_addresses_addressline"] 
+                    lineTwo=custAddress["customer_addresses_addressline1"] 
+                    cityName=custAddress["customer_addresses_city"] 
+                    stateOrProvision=custAddress["customer_addresses_state"] 
+                    postCode=custAddress["customer_addresses_zip"] 
+                    country=custAddress["customer_addresses_country"]   
+                if addressFound == False and previousAddress is not None:
+                    custAddress=self.prePareAddress(previousAddress)
+                    lineOne=custAddress["customer_addresses_addressline"] 
+                    lineTwo=custAddress["customer_addresses_addressline1"] 
+                    cityName=custAddress["customer_addresses_city"] 
+                    stateOrProvision=custAddress["customer_addresses_state"] 
+                    postCode=custAddress["customer_addresses_zip"] 
+                    country=custAddress["customer_addresses_country"]      
+   
 
-                if  len(customer_first_name )==0 and len(customer_last_name )==0  :
-                        if  len(customer_name )>0:         
-                            customer_last_name=customer_name
-              
+                contactPhone=homePhone
+                if contactPhone == None or contactPhone =="":
+                   contactPhone=workPhone
+                if contactPhone == None or contactPhone =="":
+                   contactPhone=mobilePhone   
+                if contactPhone == None or contactPhone =="":
+                   contactPhone=otherPhone   
+                if contactPhone == None or contactPhone =="":
+                   contactPhone=faxPhone   
+
                 warranty_due=""
                 amount_due=""
                 if 'price' in row:
@@ -750,7 +764,7 @@ class RODBHelper():
                             "customer_addresses_state": str(stateOrProvision),
                             "customer_addresses_zip": str(postCode),
                             "customer_addresses_country": str(country),
-                            "customer_addresses_contact_number":str(homePhone),
+                            "customer_addresses_contact_number":str(contactPhone),
                             "employee_id": str(employee_id),
                             "employee_name":str(employee_first_name),
                             "employee_first_name":str(employee_first_name),
@@ -758,7 +772,7 @@ class RODBHelper():
                             "employee_last_name": str(employee_last_name),
                             "hat_tag_number":str(vehicleHatNumber),
                             "contact_email": str(customer_email),
-                            "contact_phone": str(homePhone),
+                            "contact_phone": str(contactPhone),
                             "cell_phone": str(mobilePhone),
                             "spc_ins":orderInternalNotes ,
                             "warranty_due": str(warranty_due),
@@ -847,4 +861,172 @@ class RODBHelper():
             logger.error("Error Occure in Save MR RO WIP data to table ["+TableName+"] in DB..." , exc_info=True)
             ex_type, ex_value, ex_traceback = sys.exc_info()
             return { "operation_status":"FAILED","error_code":-1 ,"error_message":ex_value} 
+    @classmethod
+    def prePareAddress(self,address):
+        addressLine=[]        
+        lineOne=""
+        lineTwo=""
+        cityName=""
+        stateOrProvision=""
+        postCode=""
+        country=""
+        if address is not None:
+            if "addressLine" in address:
+                addressLine=address["addressLine"] 
+                if addressLine is not None and len(addressLine)>=1:
+                    lineOne=addressLine[0]
+                if addressLine is not None and len(addressLine)>=2:
+                    lineTwo=addressLine[1]
+                if addressLine is not None and len(addressLine)>=3:
+                    lineTwo=lineTwo+"\n"+addressLine[2]
+                if addressLine is not None and len(addressLine)>=4:
+                    lineTwo=lineTwo+"\n"+addressLine[3]
+            if "city" in address:
+                cityName=address["city"] 
+            if "state" in address:
+                stateOrProvision=address["state"] 
+            if "zip" in address:
+                postCode=address["zip"] 
+            if "country" in address:
+                country=address["country"] 
+        return  {
+                    "customer_addresses_addressline": str(lineOne),
+                    "customer_addresses_addressline1": str(lineTwo),
+                    "customer_addresses_city":str(cityName),
+                    "customer_addresses_state": str(stateOrProvision),
+                    "customer_addresses_zip": str(postCode),
+                    "customer_addresses_country": str(country),
+                }              
+    @classmethod
+    def ExtractAddressGroups(self,roParty):
+        address_groups={}
+        if "address" in roParty:
+            for address in roParty["address"]:
+                if "addressType" in address:
+                    addressType=address["addressType"]
+                    if addressType not in address_groups:
+                        addressLine=[]  
+                        city=""
+                        state=""
+                        zip=""  
+                        country=""                                                                                   
+                        if "lineOne" in address and len(address['lineOne'])>0 :                                        
+                            addressLine.append(str(address['lineOne']))
+                        if "lineTwo" in address and len(address['lineTwo'])>0 :                                        
+                            addressLine.append(str(address['lineTwo']))
+                        if "lineThree" in address and len(address['lineThree'])>0 :                                        
+                            addressLine.append(str(address['lineThree']))
+                        if "lineFour" in address and len(address['lineFour'])>0 :                                        
+                            addressLine.append(str(address['lineFour']))   
+                        if "cityName" in address:
+                            city=address["cityName"]
+                        if "postCode" in address:
+                            zip=address["postCode"]
+                        if "stateOrProvinceCountrySubDivisionId" in address:
+                            state=address["stateOrProvinceCountrySubDivisionId"]
+                        if "countryId" in address: 
+                            country=address["countryId"]
+                        address_groups[addressType] = {
+                                                   "addressLine": addressLine,
+                                                    "city":str(city),
+                                                    "state": str(state),
+                                                    "zip": str(zip),
+                                                    "country": str(country),
+                                                    } 
+        return address_groups
+    
+    @classmethod
+    def ExtractCustomerDetail(self,roParty):
+        companyName=""
+        personName=""
+        givenName=""
+        middleName=""
+        familyName=""
+        address_groups = {} 
+        mobilePhone=""
+        homePhone=""
+        workPhone=""
+        otherPhone=""
+        faxPhone=""
+        email=""
+        #Company
+        
+        if 'companyName' in roParty:
+            companyName= roParty["companyName"] 
+            familyName=companyName
+                
+        #Person
+                  
+        if 'personName' in roParty:                        
+            personName= roParty["personName"]
+            
+        if 'givenName' in roParty:                        
+            givenName= roParty["givenName"] 
+            
+        if 'middleName' in roParty:                        
+            middleName= roParty["middleName"] 
+            
+        if 'familyName' in roParty:
+            familyName= roParty["familyName"] 
+        if "communication" in roParty :
+            for communication in roParty['communication']:
+                if 'channelType' in communication:                                               
+                    channelType=communication['channelType']
+                    #primaryIndicator=communication['primaryIndicator']
+                    if 'channelCode' in communication:
+                        channelCode=communication['channelCode']
+                        if channelType=="Phone":
+                            if channelCode=="Cell" and 'completeNumber' in communication:
+                                mobilePhone=communication['completeNumber']
+                            if channelCode=="Home"and 'completeNumber' in communication:
+                                homePhone=communication['completeNumber']
+                            if channelCode=="Work" and 'completeNumber' in communication:
+                                workPhone=communication['completeNumber']
+                            if channelCode=="Other" and 'completeNumber' in communication:
+                                otherPhone=communication['completeNumber']
+                            if channelCode=="Fax" and 'completeNumber' in communication:
+                                faxPhone=communication['completeNumber']    
+                    if channelType=="Email" and 'emailAddress' in communication:
+                        email=communication['emailAddress']
+        address_groups=self.ExtractAddressGroups(roParty)  
+        return  {                 
+                    "personName": (personName),
+                    "companyName": (companyName),                                                                       
+                    "firstName": (givenName),
+                    "middleName": (middleName),                                                                      
+                    "lastName": (familyName),
+                    "homePhone":(homePhone),
+                    "mobilePhone":(mobilePhone),
+                    "otherPhone":(otherPhone),
+                    "workPhone":(workPhone),
+                    "faxPhone":(faxPhone),
+                    "emailAddress":(email) ,
+                    "addressGroups":address_groups                
+                }
+
+    @classmethod
+    def ExtractPartyDetail(self,roParty):
+        primaryContact=None
+        customerId=None
+        partyDetail=self.ExtractCustomerDetail(roParty)
+        #primaryContact
+        if 'primaryContact' in roParty and  roParty['primaryContact'] is not None:
+            primaryContact= self.ExtractCustomerDetail(roParty['primaryContact']  )
+        #Id
+        if 'idList' in roParty and len(roParty["idList"])>0:  
+            idList=roParty['idList']                                  
+            for id in idList:
+                if 'typeId' in id and 'id' in id and id['typeId'] == 'DMSId': 
+                    customerId= id["id"]                                    
+                    break
+        address_groups=self.ExtractAddressGroups(roParty)               
+        return  {                 
+                "partyId":str(customerId), 
+                "partyDetail": partyDetail,                 
+                "primaryContact":primaryContact ,
+                "addressGroups":address_groups   
+            }
+                
+                
+        
         

@@ -46,25 +46,15 @@ def get_time_to_live():
         target_hour=3
         target_minute=55        
         current_time = datetime.now()
-        print(current_time)
-        eastern=pytz.timezone('US/Eastern')
-        utc=pytz.utc        
-        #current_time_eastern=eastern.localize(current_time,is_dst=None)
-        current_time_eastern = current_time.astimezone(eastern)
-        print(current_time_eastern)
-        target_time_eastern = current_time_eastern.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
-        print(target_time_eastern)
-        # If the target time has already passed for today, calculate for tomorrow
-        
+        eastern=pytz.timezone('US/Eastern')       
+        current_time_eastern = current_time.astimezone(eastern)        
+        target_time_eastern = current_time_eastern.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)        
+        # If the target time has already passed for today, calculate for tomorrow        
         if current_time_eastern > target_time_eastern:
-            target_time_eastern = target_time_eastern + timedelta(days=1)
-    
+            target_time_eastern = target_time_eastern + timedelta(days=1)        
+        utc=pytz.utc        
         target_time_utc=target_time_eastern.astimezone(utc)
-        print(target_time_utc)
         epoch_time = int(target_time_utc.timestamp())
-        #current_time_utc=current_time_eastern.astimezone(utc)
-        #time_until_next_target_utc = target_time_utc - current_time_utc
-        #ttl_seconds = int((target_time_utc).total_seconds())
         return epoch_time
 # Example usage
 target_hour = 4

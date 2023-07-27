@@ -4,7 +4,7 @@ import json
 import os
 import subprocess
 import textwrap
- 
+import urllib.parse 
 from EPDE_Logging import LogManger
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -61,68 +61,116 @@ class Invoice(object):
         _functionNM="Invoice"
         try:           
             #self.err_handler.appInfo(moduleNM=_moduleNM,functionNM=_functionNM)       
-            self.logger.debug("Invoice>> store_code:"+str(store_code)+",document_type"+str(document_type))
-           
-            dynamodb = boto3.resource('dynamodb', region_name=Invoice.region)
+            self.logger.debug("GetInvoiceList>> store_code:"+str(store_code)+",document_type"+str(document_type))           
+            dynamodb = boto3.resource('dynamodb', region_name=Invoice.region)            
             TableName=self.getTableName(store_code)
             table = dynamodb.Table(TableName)       
             fetchAll=False
             LastEvaluatedKey=None
+            starttime = datetime.now()
+            items=[]
             if last_key and page_size>0:
-                
-                key1=json.loads(last_key)
+                try:
+                    key1=json.loads(last_key)
+                except  Exception as e:
+                        sq=urllib.parse.unquote(last_key)
+                        key1 = json.loads((sq)) 
                 response = table.query(
                      KeyConditionExpression= Key('document_type').eq(document_type),
                      ExclusiveStartKey=key1,Limit=page_size,ConsistentRead=False)
                 if 'LastEvaluatedKey' in response:
                     LastEvaluatedKey=response['LastEvaluatedKey']   
             else:
-                if page_size>0:
-                   response = table.query(
+                if last_key:
+                    try:
+                            key1=json.loads(last_key)
+                    except  Exception as e:
+                            sq=urllib.parse.unquote(last_key)
+                            key1 = json.loads(str(sq)) 
+                    response = table.query(
+                        KeyConditionExpression= Key('document_type').eq(document_type),
+                        ConsistentRead=False, ExclusiveStartKey=key1)
+                    if 'LastEvaluatedKey' in response:
+                        LastEvaluatedKey=response['LastEvaluatedKey']  
+                elif page_size>0:
+                    response = table.query(
                      KeyConditionExpression= Key('document_type').eq(document_type),
                      ConsistentRead=False,Limit=page_size)
-                   if 'LastEvaluatedKey' in response:
+                    if 'LastEvaluatedKey' in response:
                        LastEvaluatedKey=response['LastEvaluatedKey']  
                 else:
                     response = table.query(
                      KeyConditionExpression= Key('document_type').eq(document_type),
                      ConsistentRead=False)
                     if 'LastEvaluatedKey' in response:
-                       LastEvaluatedKey=response['LastEvaluatedKey']   
-                    fetchAll=True
-            #try:
-             #   self.logger.debug("Invoice>> start parallel_scan_table")
-              #  dynamo_client = boto3.resource("dynamodb").meta.client
-               # items=[]
-                #for item in self.parallel_scan_table(dynamo_client, TableName=TableName):
-                 #       items.append(item)
-                        #self.logger.debug(item)  
-                #self.logger.debug("Invoice>> end parallel_scan_table")   
-                #return { "status":True,"items": items }
-            #except :
-             #    pass   
-             
-                   
-            
+                       LastEvaluatedKey=response['LastEvaluatedKey']                
             try:
-                items = response['Items']  
-                if fetchAll:                
+                callTimeOut=20     
+                endtime = datetime.now()
+                delta=endtime-starttime
+                consumedSeconds=delta.total_seconds()  
+                self.logger.debug("consumedSeconds="+str(consumedSeconds))         
+                if 'LastEvaluatedKey' in response:
+                    LastEvaluatedKey=response['LastEvaluatedKey'] 
+                    self.logger.debug("LastEvaluatedKey="+str(LastEvaluatedKey))
+                    if(consumedSeconds+consumedSeconds )<callTimeOut:  
+                        fetchAll=True
+                if 'Items' in response:
+                    items = response['Items']  
+                self.logger.debug("Total items="+str(len(items)))                 
+                page_size_new=0
+                if page_size>0: 
+                        if fetchAll==True and len(items)<page_size:
+                            fetchAll=True
+                            page_size_new=page_size-len(items)
+                        else:                    
+                            fetchAll=False
+                            self.logger.debug("Total items  is Greater or equal to page size="+str(page_size))                     
+
+                if  fetchAll ==True:                       
                     while 'LastEvaluatedKey' in response:
-                        response = table.query(
-                            KeyConditionExpression= Key('document_type').eq(document_type),
-                            ConsistentRead=False,               
-                            ExclusiveStartKey=response['LastEvaluatedKey']
-                            )
+                        starttime = datetime.now()
+                        if page_size>0:
+                            response = table.query(
+                                KeyConditionExpression= Key('document_type').eq(document_type),
+                                ConsistentRead=False,Limit=page_size_new ,              
+                                ExclusiveStartKey=response['LastEvaluatedKey']
+                                )
+                        else:
+                            response = table.query(
+                                KeyConditionExpression= Key('document_type').eq(document_type),
+                                ConsistentRead=False,               
+                                ExclusiveStartKey=response['LastEvaluatedKey']
+                                )
                         try:
-                            items.update(response['Items'])
+                            items1=response['Items']
+                            self.logger.debug("loop inner Total items="+str(len(items1)))
+                            items.extend(items1)
+                            self.logger.debug("loop after adding final Total items"+str(len(items)))
+                            LastEvaluatedKey=None
+                            page_size_new=page_size_new-len(items1) 
                             if 'LastEvaluatedKey' in response:
                                 LastEvaluatedKey=response['LastEvaluatedKey']   
+                                self.logger.debug("Loop LastEvaluatedKey="+str(LastEvaluatedKey))                               
+
+                            if LastEvaluatedKey is None or (page_size>0 and len(items)>=page_size):
+                               break                               
                         except:
-                            ""
-                return { "status":True,"items": items, "LastEvaluatedKey": LastEvaluatedKey}
+                            self.logger.error(">> error=",True) 
+                        endtime = datetime.now()
+                        delta=endtime-starttime
+                        consumedSeconds=consumedSeconds+delta.total_seconds()
+                        self.logger.debug("loop consumedSeconds="+str(consumedSeconds))                           
+                        if(delta.total_seconds()+consumedSeconds )>=callTimeOut:    
+                            self.logger.debug("loop exceeded consumedSeconds="+str(consumedSeconds))  
+                            break                         
+                if LastEvaluatedKey is not None :                  
+                    LastEvaluatedKey = json.dumps(LastEvaluatedKey) 
+                    LastEvaluatedKey=urllib.parse.quote_plus(str(LastEvaluatedKey) ) 
+                self.logger.debug("LastEvaluatedKey>>"+str(LastEvaluatedKey))                
+                return { "status":True,"items": items ,"LastEvaluatedKey":LastEvaluatedKey}
             except:
-                return { "status":True,"items": [],"LastEvaluatedKey": LastEvaluatedKey }                
-          
+                return { "status":True,"items": [] ,"LastEvaluatedKey":LastEvaluatedKey}           
         except Exception as e:
             return self.err_handler.HandleGeneralError(moduleNM=_moduleNM,functionNM=_functionNM) 
 

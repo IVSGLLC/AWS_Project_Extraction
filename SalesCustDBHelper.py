@@ -206,21 +206,19 @@ class SalesCustDBHelper():
                 make=''
                 model=''
                 year=''
-                if "tradeInVehicleCredit" in row :
-                    
-                    if row["tradeInVehicleCredit"] is not None and len(row["tradeInVehicleCredit"])>0:
-                        for tradeInVehicleCredit in row["tradeInVehicleCredit"]:
-                            if "vehicle" in tradeInVehicleCredit:
-                                vehicle= tradeInVehicleCredit["vehicle"]
-                                if "vehicleId" in vehicle:
-                                    vin=vehicle["vehicleId"]
-                                if "make" in vehicle:
-                                    make=vehicle["make"]
-                                if "model" in vehicle:
-                                    model=vehicle["model"]
-                                if "model" in vehicle:
-                                    year=vehicle["modelYear"]
-                                break
+                if "retailDeliveryReportingVehicleLineItem" in row and row["retailDeliveryReportingVehicleLineItem"] is not None :                    
+                    vehicleLineItem = row["retailDeliveryReportingVehicleLineItem"]
+                    if "vehicle" in vehicleLineItem:
+                        vehicle= vehicleLineItem["vehicle"]
+                        if "vehicleId" in vehicle:
+                            vin=vehicle["vehicleId"]
+                        if "make" in vehicle:
+                            make=vehicle["make"]
+                        if "model" in vehicle:
+                            model=vehicle["model"]
+                        if "modelYear" in vehicle:
+                            year=vehicle["modelYear"]
+                         
                 
                 dateSold=''
                 soldAge=''
@@ -244,38 +242,53 @@ class SalesCustDBHelper():
                 buyer_number="null"  
                 buyer_name="" 
                 buyer_f_name="" 
-                buyer_m_name="" 
+                buyer_n_name="" 
                 buyer_l_name="" 
                 buyer_email=""
-                if 'dealParties' in row and len(row["dealParties"])>0:
+                customerParty=None
+                if 'dealParties' in row and len(row["dealParties"])>0:                
                     for dealParty in row['dealParties']:
-                        if 'partyType' in dealParty and  dealParty['partyType'] == 'Buyer': 
-                            if 'personName' in dealParty and len(dealParty["personName"])>0:                        
-                                buyer_name= dealParty["personName"] 
-                            if 'firstName' in dealParty and len(dealParty["firstName"])>0:                        
-                                buyer_f_name= dealParty["firstName"] 
-                            if 'middleName' in dealParty and len(dealParty["middleName"])>0:                               
-                                buyer_n_name= dealParty["middleName"]                                
-                            if 'familyName' in dealParty and len(dealParty["familyName"])>0:                                
-                                buyer_l_name= dealParty["familyName"]                                 
+                        if 'partyType' in dealParty and  dealParty['partyType'] == 'Buyer':   
+                            customerParty=self.ExtractPartyDetail(dealParty)  
 
-                            if 'idList' in dealParty and len(dealParty["idList"])>0: 
-                                idList=dealParty['idList']                               
-                                for id in idList:
-                                    if 'typeId' in id and 'id' in id and  id['typeId'] == 'Other': 
-                                       buyer_number= id["id"]  
+                if customerParty is not None:
+                    if 'partyId' in customerParty and customerParty['partyId'] is not None:
+                        buyer_number=customerParty['partyId']
 
-                            if "communication" in dealParty :
-                              for communication in dealParty['communication']:
-                                    if 'channelType' in communication:
-                                        channelType=communication['channelType']
-                                        #primaryIndicator=communication['primaryIndicator']                                        
-                                        if channelType=="Email" and 'emailAddress' in communication:
-                                            buyer_email=communication['emailAddress']
-                            
+                    if 'partyDetail' in customerParty and customerParty['partyDetail'] is not None:
+                        partyDetail=customerParty['partyDetail']
+                        if partyDetail is not None:
+                            buyer_f_name= partyDetail['firstName']
+                            buyer_n_name=partyDetail['middleName']
+                            buyer_l_name= partyDetail['lastName']
+                            companyName=partyDetail['companyName']
+                            personName=partyDetail['personName']
+                            if (buyer_f_name is None or buyer_f_name=="") and (buyer_l_name is None or buyer_l_name==""):
+                                if companyName is not None and companyName!="":
+                                   buyer_name= companyName
+                                if personName is not None and personName!="":
+                                  buyer_name=personName
+                                 
+                                  
+                            """ homePhone=partyDetail['homePhone']
+                            mobilePhone=partyDetail['mobilePhone']
+                            workPhone=partyDetail['workPhone']
+                            otherPhone=partyDetail['otherPhone']
+                            faxPhone=partyDetail['faxPhone']
+                            buyer_email=partyDetail['emailAddress'] """
+
+                     
+
+
+
+                logger.debug("buyer_f_name="+str(buyer_f_name))  
+                logger.debug("buyer_n_name="+str(buyer_n_name))  
+                logger.debug("buyer_l_name="+str(buyer_l_name))            
                 if buyer_name=="" or len(buyer_name)==0:
                     if  len(buyer_f_name)>0: 
                         buyer_name=buyer_f_name
+                    if  len(buyer_n_name)>0: 
+                        buyer_name=buyer_name+ " "+buyer_n_name
                     if  len(buyer_l_name)>0: 
                         buyer_name=buyer_name+ " "+buyer_l_name
 
@@ -367,7 +380,99 @@ class SalesCustDBHelper():
             logger.error("Error Occure in Save MR DEALS- salescust data to table ["+TableName+"] in DB..." , exc_info=True)
             ex_type, ex_value, ex_traceback = sys.exc_info()
             return { "operation_status":"FAILED","error_code":-1 ,"error_message":ex_value}
+             
+    
+    @classmethod
+    def ExtractCustomerDetail(self,partsInvoiceParty):
+        companyName=""
+        personName=""
+        givenName=""
+        middleName=""
+        familyName=""
+        mobilePhone=""
+        homePhone=""
+        workPhone=""
+        otherPhone=""
+        faxPhone=""
+        email=""
+        #Company
         
+        if 'companyName' in partsInvoiceParty:
+            companyName= partsInvoiceParty["companyName"] 
+            familyName=companyName
+                
+        #Person
+                  
+        if 'personName' in partsInvoiceParty:                        
+            personName= partsInvoiceParty["personName"]
+            
+        if 'givenName' in partsInvoiceParty:                        
+            givenName= partsInvoiceParty["givenName"] 
+            
+        if 'middleName' in partsInvoiceParty:                        
+            middleName= partsInvoiceParty["middleName"] 
+            
+        if 'familyName' in partsInvoiceParty:
+            familyName= partsInvoiceParty["familyName"] 
+        if "communication" in partsInvoiceParty :
+            for communication in partsInvoiceParty['communication']:
+                if 'channelType' in communication:                                               
+                    channelType=communication['channelType']
+                    #primaryIndicator=communication['primaryIndicator']
+                    if 'channelCode' in communication:
+                        channelCode=communication['channelCode']
+                        if channelType=="Phone":
+                            if channelCode=="Cell" and 'completeNumber' in communication:
+                                mobilePhone=communication['completeNumber']
+                            if channelCode=="Home"and 'completeNumber' in communication:
+                                homePhone=communication['completeNumber']
+                            if channelCode=="Work" and 'completeNumber' in communication:
+                                workPhone=communication['completeNumber']
+                            if channelCode=="Other" and 'completeNumber' in communication:
+                                otherPhone=communication['completeNumber']
+                            if channelCode=="Fax" and 'completeNumber' in communication:
+                                faxPhone=communication['completeNumber']    
+                    if channelType=="Email" and 'emailAddress' in communication:
+                        email=communication['emailAddress']
+        return  {                 
+                    "personName": (personName),
+                    "companyName": (companyName),                                                                       
+                    "firstName": (givenName),
+                    "middleName": (middleName),                                                                      
+                    "lastName": (familyName),
+                    "homePhone":(homePhone),
+                    "mobilePhone":(mobilePhone),
+                    "otherPhone":(otherPhone),
+                    "workPhone":(workPhone),
+                    "faxPhone":(faxPhone),
+                    "emailAddress":(email) ,                               
+                }
+
+    @classmethod
+    def ExtractPartyDetail(self,partsInvoiceParty):
+        primaryContact=None
+        customerId=None
+        partyDetail=self.ExtractCustomerDetail(partsInvoiceParty)
+        #primaryContact
+        if 'primaryContact' in partsInvoiceParty and  partsInvoiceParty['primaryContact'] is not None:
+            primaryContact= self.ExtractCustomerDetail(partsInvoiceParty['primaryContact']  )
+        #Id
+        if 'idList' in partsInvoiceParty and len(partsInvoiceParty["idList"])>0:  
+            idList=partsInvoiceParty['idList']                                  
+            for id in idList:
+                if 'typeId' in id and 'id' in id and id['typeId'] == 'DMSId': 
+                    customerId= id["id"]                                    
+                    break
+              
+        return  {                 
+                "partyId":str(customerId), 
+                "partyDetail": partyDetail,                 
+                "primaryContact":primaryContact ,
+               
+            }
+                
+                
+            
     @classmethod
     def Save_TKSalesCust(self,store_code,json_deals,client_id):
         logger.info("Inside Save_TKSalesCust Method....store_code:"+store_code+",client_id="+client_id)
