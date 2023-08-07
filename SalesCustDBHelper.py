@@ -274,8 +274,8 @@ class SalesCustDBHelper():
                             mobilePhone=partyDetail['mobilePhone']
                             workPhone=partyDetail['workPhone']
                             otherPhone=partyDetail['otherPhone']
-                            faxPhone=partyDetail['faxPhone']
-                            buyer_email=partyDetail['emailAddress'] """
+                            faxPhone=partyDetail['faxPhone']"""
+                            buyer_email=partyDetail['emailAddress'] 
 
                      
 

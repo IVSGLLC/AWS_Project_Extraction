@@ -26,7 +26,7 @@ class WIPParser():
         wip_status : bool =False
         wip_email : bool =False;   
   
-        dict_ro={'REFER':[],'OPEN-DATE':[],'TOTAL$':[],'COMMENTS':[],'YR':[],'MAKE':[],'MODEL':[]}
+        dict_ro={'REFER':[],'OPEN-DATE':[],'TOTAL$':[],'COMMENTS':[],'YR':[],'MAKE':[],'MODEL':[],'EPDE.TOTAL.ESTIMATE':[]}
         dict_cust={'REFER':[],'CUST':[],'CUSTOMER LINE1':[],'CUSTOMER LINE3':[],'CITY':[],'STATE':[],'ZIP':[],'SR-R':[],'SR-NAME':[],'SERIAL NO':[]}
         dict_status={'REFER':[],'STATUS':[],'PRINT-TIME':[],'CLOSED':[],'COMMENT':[],'HOME PHONE':[],'EPDE.SPC.INS':[]}
         dict_email={'REFER':[],'EMAIL':[],'PHONE':[],'TAG-NO':[],'WP':[]}
@@ -77,8 +77,8 @@ class WIPParser():
                 if len(row[0:8].strip())==0 :
                     if len(row[68:78].strip())>0:
                         dict_ro["MAKE"][(len(dict_ro["MAKE"])-1)] = (dict_ro["MAKE"][(len(dict_ro["MAKE"])-1)] + str(row[68:78].strip())) 
-                    if len(row[79:].strip())>0:
-                        dict_ro["MODEL"][(len(dict_ro["MODEL"])-1)] = (dict_ro["MODEL"][(len(dict_ro["MODEL"])-1)] + str(row[79:].strip()))
+                    if len(row[79:90].strip())>0:
+                        dict_ro["MODEL"][(len(dict_ro["MODEL"])-1)] = (dict_ro["MODEL"][(len(dict_ro["MODEL"])-1)] + str(row[79:90].strip()))
                     if len(row[29:64].strip())>0:
                         dict_ro["COMMENTS"][(len(dict_ro["COMMENTS"])-1)] = (dict_ro["COMMENTS"][(len(dict_ro["COMMENTS"])-1)] +' '+ str(row[29:64])) 
                 else:
@@ -88,7 +88,8 @@ class WIPParser():
                     dict_ro["COMMENTS"].append(str(row[29:64]))
                     dict_ro["YR"].append(str(row[65:67].strip()))
                     dict_ro["MAKE"].append(str(row[68:78].strip()))
-                    dict_ro["MODEL"].append(str(row[79:].strip()))  
+                    dict_ro["MODEL"].append(str(row[79:90].strip())) 
+                    dict_ro["EPDE.TOTAL.ESTIMATE"].append(str(row[91:].strip())) 
 
             if wip_cust==True and not row=="\n" and not row.startswith(tuple(skip_line_startwith_list)) and not (list(filter(row.__contains__, skip_line_contains_list)) != []):
             #if wip_cust==True and not row=="\n" and not row.startswith("PAGE") and not (row.__contains__("ITEMS SELECTED") ) and not row.startswith(">SORT")  and not (row.__contains__("REFER#") and  row.__contains__("EPDE.CUST") and row.__contains__("CUSTOMER LINE1") and row.__contains__("CITY-STATE-ZIP") and row.__contains__("SERIAL NO") and row.__contains__("CUSTOMER LINE3")):
@@ -176,7 +177,8 @@ class WIPParser():
                     dict_status["COMMENT"].append(str(row[40:64]))
                     dict_status["HOME PHONE"].append(str(row[65:75].strip()))
                     dict_status["EPDE.SPC.INS"].append(str(row[76:]))
-
+                   
+                    
                     
 
             if wip_email==True and not row=="\n" and not row.startswith(tuple(skip_line_startwith_list)) and not (list(filter(row.__contains__, skip_line_contains_list)) != []):

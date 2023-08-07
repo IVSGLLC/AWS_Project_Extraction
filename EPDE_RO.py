@@ -304,6 +304,7 @@ class RepairOrder(object):
                             "closeDateTime": item.get('close_date_time'),
                             "amountDue": item.get('amount_due'),
                             "warrantyDue": item.get('warranty_due'),
+                            "totalEstimate":item.get('total_estimate'),  
                             "comments": item.get('comments'),
                             "vehicle": {
                                         "vin": item.get('vehicle_vin'),
@@ -360,6 +361,7 @@ class RepairOrder(object):
                     "closeDateTime": item.get('close_date_time'),
                     "amountDue": item.get('amount_due'),
                     "warrantyDue": item.get('warranty_due'),
+                    "totalEstimate":item.get('total_estimate'),  
                     "comments": item.get('comments'),
                     "vehicle": {
                                 "vin": item.get('vehicle_vin'),

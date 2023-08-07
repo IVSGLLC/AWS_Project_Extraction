@@ -37,12 +37,12 @@ def do_batch_get(dynamodb,batch_keys):
             batch_keys = unprocessed
             unprocessed_count = sum(
                 [len(batch_key['Keys']) for batch_key in batch_keys.values()])
-            Logger.info(
+            Logger.debug(
                 "%s unprocessed keys returned. Sleep, then retry.",
                 unprocessed_count)
             tries += 1
             if tries < max_tries:
-                logger.info("Sleeping for %s seconds.", sleepy_time)
+                logger.debug("Sleeping for %s seconds.", sleepy_time)
                 time.sleep(sleepy_time)
                 sleepy_time = min(sleepy_time * 2, 32)
         else:
@@ -69,7 +69,7 @@ def get_batch_data(dynamodb,tableName, item_list):
     try:
         retrieved = do_batch_get(dynamodb,batch_keys)
         for response_table, response_items in retrieved.items():
-            logger.info("Got %s items from %s.", len(response_items), response_table)
+            logger.debug("Got %s items from %s.", len(response_items), response_table)
     except ClientError:
         logger.error(
             "Couldn't get items from %s and %s.", tableName)

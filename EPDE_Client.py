@@ -397,7 +397,7 @@ class AppClient(object):
         return {"status":response,"resjson":resjson}  """
     @classmethod
     def isMaintenanceTime(self,config,auth=None):
-        self.logger.info("isMaintenanceTime>> x:"+str(config)) 
+        self.logger.debug("isMaintenanceTime>> x:"+str(config)) 
         response=False    
         resjson=""  
         try:

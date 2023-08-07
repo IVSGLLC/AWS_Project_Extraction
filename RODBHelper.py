@@ -84,6 +84,7 @@ class RODBHelper():
                             "open_date_time": open_date_time,
                             "close_date_time":close_date_time,
                             "amount_due": str(row["TOTAL$"]),
+                            "total_estimate":str(row["EPDE.TOTAL.ESTIMATE"]),
                             "comments": dbhelper.RemoveNewLineCarrigeReturn(row["COMMENTS"]),
                             "vehicle_vin":dbhelper.CovertToString( row["SERIAL NO"]),
                             "vehicle_make": dbhelper.CovertToString(row["MAKE"]),
@@ -142,6 +143,7 @@ class RODBHelper():
                                        "open_date_time",
                                        "close_date_time",
                                        "amount_due",
+                                       "total_estimate",
                                        "comments",
                                        "vehicle_vin",
                                        "vehicle_make",
@@ -347,6 +349,7 @@ class RODBHelper():
                     invoice=row['invoice']
                     if 'invoiceAmount' in invoice and invoice["invoiceAmount"] is not None:
                         amount_due=str(invoice["invoiceAmount"])
+                total_estimate=""
                 item={
                             "client_id": str(client_id),
                             "store_code": str(store_code),
@@ -356,6 +359,7 @@ class RODBHelper():
                             "open_date_time": open_date_time,
                             "close_date_time":close_date_time,
                             "amount_due": str(amount_due),
+                            "total_estimate":str(total_estimate),
                             "comments": externalnotes,
                             "vehicle_vin":str(row["vehicle"]["vin"]),
                             "vehicle_make": str(row["vehicle"]["make"]),
@@ -415,6 +419,7 @@ class RODBHelper():
                                        "open_date_time",
                                        "close_date_time",
                                        "amount_due",
+                                       "total_estimate",
                                        "comments",
                                        "vehicle_vin",
                                        "vehicle_make",
@@ -736,7 +741,8 @@ class RODBHelper():
                                     amount_due=str(price["chargeAmount"])
                             if priceCode=="WarrantyTotalSale" and "chargeAmount" in price :                            
                                     warranty_due=str(price["chargeAmount"])
-                
+                total_estimate=""
+
                 item={
                             "client_id": str(client_id),
                             "store_code": str(store_code),
@@ -746,6 +752,7 @@ class RODBHelper():
                             "open_date_time": str(open_date_time),
                             "close_date_time":str(close_date_time),
                             "amount_due": str(amount_due),
+                            "total_estimate":str( total_estimate),
                             "comments": str(orderNotes),
                             "vehicle_vin":str(vin),
                             "vehicle_make": str(make),
@@ -809,6 +816,7 @@ class RODBHelper():
                                        "open_date_time",
                                        "close_date_time",
                                        "amount_due",
+                                       "total_estimate",
                                        "comments",
                                        "vehicle_vin",
                                        "vehicle_make",

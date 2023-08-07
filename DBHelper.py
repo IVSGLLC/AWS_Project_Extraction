@@ -135,7 +135,7 @@ class DBHelper():
                     InvocationType = 'Event',
                     Payload = json.dumps(inputParams)
                 )
-                logger.info("responseFrom SaveDataHandler Lambda="+str(response))   
+                logger.debug("responseFrom SaveDataHandler Lambda="+str(response))   
     @classmethod
     def submitSaveDataLocal(self,TableName,items,region='us-east-1',overwrite_by_pkeys=['document_type', 'document_id'],checkForUpdateExisting=False,MAX_PROC=4,BATCH_SIZE=25):
             # Define the client to interact with AWS Lambda
@@ -350,9 +350,9 @@ class DBHelper():
                         "create_date_time":str(create_date)                                                                               
                                     }
                                         ) 
-                    logger.info("Audit Log Created partitionKey:"+str(partitionKey)) 
+                    logger.debug("Audit Log Created partitionKey:"+str(partitionKey)) 
             else:
-                logger.info("Audit Log Not Created, partitionKey is None or isAudit is false,partitionKey:"+str(partitionKey) )       
+                logger.debug("Audit Log Not Created, partitionKey is None or isAudit is false,partitionKey:"+str(partitionKey) )       
         except Exception as e:
                 logger.error("Error Occure in Audit_ExtractDetail data to table ["+TableName+"] in DB..." , exc_info=True)
     @classmethod

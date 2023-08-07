@@ -106,29 +106,45 @@ class ROHistory(object):
             if 'Items' in response:
                 items = response['Items']  
             self.logger.debug("Total items="+str(len(items)))
-
+            page_size_new=0
+            if page_size>0: 
+                if fetchAll==True and len(items)<page_size:
+                    fetchAll=True
+                    page_size_new=page_size-len(items)
+                else:                    
+                    fetchAll=False
+                    self.logger.debug("Total items  is Greater or equal to page size="+str(page_size))    
             if  fetchAll ==True:                
                     while 'LastEvaluatedKey' in response:
                         starttime = datetime.now()
-                        response = table.query(
-                            KeyConditionExpression= Key('document_type').eq(document_type),
-                            ConsistentRead=False,               
-                            ExclusiveStartKey=response['LastEvaluatedKey']
+                        if page_size>0:
+                            response = table.query(
+                                KeyConditionExpression= Key('document_type').eq(document_type),
+                                ConsistentRead=False,Limit=page_size_new ,              
+                                ExclusiveStartKey=response['LastEvaluatedKey']
+                                )
+                        else:
+                            response = table.query(
+                                KeyConditionExpression= Key('document_type').eq(document_type),
+                                ConsistentRead=False,               
+                                ExclusiveStartKey=response['LastEvaluatedKey']
                             )
+                        
                         try:
                             items1=response['Items']
                             self.logger.debug("loop inner Total items="+str(len(items1)))
                             items.extend(items1)
                             self.logger.debug("loop after adding final Total items"+str(len(items)))
                             LastEvaluatedKey=None
+                            page_size_new=page_size_new-len(items1) 
                             if 'LastEvaluatedKey' in response:
                                 LastEvaluatedKey=response['LastEvaluatedKey']   
                                 self.logger.debug("Loop LastEvaluatedKey="+str(LastEvaluatedKey))
-                            if LastEvaluatedKey is None:
+                            if LastEvaluatedKey is None or (page_size>0 and len(items)>=page_size):
                                 break
                                
                         except:
-                            ""
+                            self.logger.error(">> error=",True) 
                         endtime = datetime.now()
                         delta=endtime-starttime
                         consumedSeconds=consumedSeconds+delta.total_seconds()
@@ -284,7 +300,7 @@ class ROHistory(object):
             delta=endtime-starttime
             consumedSeconds=delta.total_seconds()  
             self.logger.debug("consumedSeconds="+str(consumedSeconds))         
-            self.logger.debug("response="+str(response))
+            #self.logger.debug("response="+str(response))
             if 'LastEvaluatedKey' in response:
                     LastEvaluatedKey=response['LastEvaluatedKey'] 
                     self.logger.debug("LastEvaluatedKey="+str(LastEvaluatedKey))
@@ -293,36 +309,60 @@ class ROHistory(object):
             if 'Items' in response:
                 items = response['Items']  
             self.logger.debug("Total items="+str(len(items)))
+            page_size_new=0
+            if page_size>0: 
+                if fetchAll==True and len(items)<page_size:
+                    fetchAll=True
+                    page_size_new=page_size-len(items)
+                else:                    
+                    fetchAll=False
+                    self.logger.debug("Total items  is Greater or equal to page size="+str(page_size))
             if  fetchAll ==True:                
                 while 'LastEvaluatedKey' in response:
                     starttime = datetime.now()
-                    if filterExpression is not None:
-                        response = table.query(
-                            KeyConditionExpression= keyConditionExpression,
-                            FilterExpression= filterExpression,
-                            ConsistentRead=False,               
-                            ExclusiveStartKey=response['LastEvaluatedKey']
-                            )
+                    if page_size>0:
+                        if filterExpression is not None:
+                            response = table.query(
+                                KeyConditionExpression= keyConditionExpression,
+                                FilterExpression= filterExpression,
+                                ConsistentRead=False, Limit=page_size_new ,               
+                                ExclusiveStartKey=response['LastEvaluatedKey']
+                                )
+                        else:
+                            response = table.query(
+                                KeyConditionExpression= keyConditionExpression,
+                                ConsistentRead=False,  Limit=page_size_new ,              
+                                ExclusiveStartKey=response['LastEvaluatedKey']
+                                )
                     else:
-                        response = table.query(
-                            KeyConditionExpression= keyConditionExpression,
-                            ConsistentRead=False,               
-                            ExclusiveStartKey=response['LastEvaluatedKey']
-                            )
+                        if filterExpression is not None:
+                            response = table.query(
+                                KeyConditionExpression= keyConditionExpression,
+                                FilterExpression= filterExpression,
+                                ConsistentRead=False,               
+                                ExclusiveStartKey=response['LastEvaluatedKey']
+                                )
+                        else:
+                            response = table.query(
+                                KeyConditionExpression= keyConditionExpression,
+                                ConsistentRead=False,               
+                                ExclusiveStartKey=response['LastEvaluatedKey']
+                                )
                     try:
                         items1=response['Items']
-                        #self.logger.debug("loop inner Total items="+str(len(items1)))
+                        self.logger.debug("loop inner Total items="+str(len(items1)))
                         items.extend(items1)
-                        #self.logger.debug("loop after adding final Total items"+str(len(items)))
+                        self.logger.debug("loop after adding final Total items"+str(len(items)))
                         LastEvaluatedKey=None
+                        page_size_new=page_size_new-len(items1) 
                         if 'LastEvaluatedKey' in response:
                             LastEvaluatedKey=response['LastEvaluatedKey']   
                             self.logger.debug("Loop LastEvaluatedKey="+str(LastEvaluatedKey))
-                        if LastEvaluatedKey is None:
-                            self.logger.debug("Loop LastEvaluatedKey="+str(LastEvaluatedKey))
+                        if LastEvaluatedKey is None or (page_size>0 and len(items)>=page_size):
+                            #self.logger.debug("Loop LastEvaluatedKey="+str(LastEvaluatedKey))
                             break                               
                     except:
-                        ""
+                        self.logger.error(">> error=",True) 
                     endtime = datetime.now()
                     delta=endtime-starttime
                     consumedSeconds=consumedSeconds+delta.total_seconds()
@@ -465,7 +505,7 @@ class ROHistory(object):
             delta=endtime-starttime
             consumedSeconds=delta.total_seconds()  
             self.logger.debug("consumedSeconds="+str(consumedSeconds))         
-            self.logger.debug("response="+str(response))
+            #self.logger.debug("response="+str(response))
             if 'LastEvaluatedKey' in response:
                     LastEvaluatedKey=response['LastEvaluatedKey'] 
                     self.logger.debug("LastEvaluatedKey="+str(LastEvaluatedKey))
@@ -474,36 +514,60 @@ class ROHistory(object):
             if 'Items' in response:
                 items = response['Items']  
             self.logger.debug("Total items="+str(len(items)))
+            page_size_new=0
+            if page_size>0: 
+                if fetchAll==True and len(items)<page_size:
+                    fetchAll=True
+                    page_size_new=page_size-len(items)
+                else:                    
+                    fetchAll=False
+                    self.logger.debug("Total items  is Greater or equal to page size="+str(page_size))
             if  fetchAll ==True:                
                 while 'LastEvaluatedKey' in response:
                     starttime = datetime.now()
-                    if filterExpression is not None:
-                        response = table.query(
-                            KeyConditionExpression= keyConditionExpression,
-                            FilterExpression= filterExpression,
-                            ConsistentRead=False,               
-                            ExclusiveStartKey=response['LastEvaluatedKey']
-                            )
+                    if page_size>0:
+                        if filterExpression is not None:
+                            response = table.query(
+                                KeyConditionExpression= keyConditionExpression,
+                                FilterExpression= filterExpression,
+                                ConsistentRead=False, Limit=page_size_new ,              
+                                ExclusiveStartKey=response['LastEvaluatedKey']
+                                )
+                        else:
+                            response = table.query(
+                                KeyConditionExpression= keyConditionExpression,
+                                ConsistentRead=False, Limit=page_size_new ,              
+                                ExclusiveStartKey=response['LastEvaluatedKey']
+                                )
                     else:
-                        response = table.query(
-                            KeyConditionExpression= keyConditionExpression,
-                            ConsistentRead=False,               
-                            ExclusiveStartKey=response['LastEvaluatedKey']
-                            )
+                        if filterExpression is not None:
+                            response = table.query(
+                                KeyConditionExpression= keyConditionExpression,
+                                FilterExpression= filterExpression,
+                                ConsistentRead=False,               
+                                ExclusiveStartKey=response['LastEvaluatedKey']
+                                )
+                        else:
+                            response = table.query(
+                                KeyConditionExpression= keyConditionExpression,
+                                ConsistentRead=False,               
+                                ExclusiveStartKey=response['LastEvaluatedKey']
+                                )
                     try:
                         items1=response['Items']
-                        #self.logger.debug("loop inner Total items="+str(len(items1)))
+                        self.logger.debug("loop inner Total items="+str(len(items1)))
                         items.extend(items1)
-                        #self.logger.debug("loop after adding final Total items"+str(len(items)))
+                        self.logger.debug("loop after adding final Total items"+str(len(items)))
                         LastEvaluatedKey=None
+                        page_size_new=page_size_new-len(items1) 
                         if 'LastEvaluatedKey' in response:
                             LastEvaluatedKey=response['LastEvaluatedKey']   
                             self.logger.debug("Loop LastEvaluatedKey="+str(LastEvaluatedKey))
-                        if LastEvaluatedKey is None:
-                            self.logger.debug("Loop LastEvaluatedKey="+str(LastEvaluatedKey))
+                        if LastEvaluatedKey is None or (page_size>0 and len(items)>=page_size):
+                            #self.logger.debug("Loop LastEvaluatedKey="+str(LastEvaluatedKey))
                             break                               
                     except:
-                        ""
+                        self.logger.error(">> error=",True) 
                     endtime = datetime.now()
                     delta=endtime-starttime
                     consumedSeconds=consumedSeconds+delta.total_seconds()
