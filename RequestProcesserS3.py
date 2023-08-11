@@ -5,10 +5,13 @@ import json
 import logging
 import os
 import sys
+
+import pytz
 from DBHelper import DBHelper
 import DynamoDBDAO as DAO
 import json
 import urllib.parse
+from EPDE_CloudWatchLog import CloudWatchLogger
 from EPDE_S3 import S3Manager
 import ParseData as PU
 loglevel =int(os.environ['LOG_LEVEL'])
@@ -17,18 +20,25 @@ logger.setLevel(loglevel)
 
 class RequestProcesserS3():     
     @classmethod 
-    def Process_S3Record(self,records):
+    def Process_S3Record(self,records,aws_account_id):
         logger.debug("Inside Process_S3Record function...")
         st = datetime.now()
+        eastern=pytz.timezone('US/Eastern')          
+        processDateTime = datetime.now().astimezone(eastern)
+        cwLogger= CloudWatchLogger()
+        partitionKey=None
+        store_code=''
+        file_type=''
+        extractType=''  
+        df_final={}  
+        totalProcessDuration=0 
         try:
             # Get the object from the event and show its content type
             bucket = records[0]['s3']['bucket']['name']
-            fileNameKey = urllib.parse.unquote_plus(records[0]['s3']['object']['key'], encoding='utf-8')
-             
+            fileNameKey = urllib.parse.unquote_plus(records[0]['s3']['object']['key'], encoding='utf-8')             
             region=os.environ['REGION']
             s3=S3Manager(region)
-            res=s3.downloadFile(bucketName=bucket,fileName=fileNameKey)
-           
+            res=s3.downloadFile(bucketName=bucket,fileName=fileNameKey)           
             if res['status'] :
                 s3.deleteFile(bucketName=bucket,fileName=fileNameKey)
                 contents = res['data']
@@ -89,32 +99,46 @@ class RequestProcesserS3():
                  
                 ParseData1= PU.ParseData()
                 if file_type=='WIP':
+                    extractType='WIP'
                     df_final=ParseData1.parse_DMS_WIP_File(file_data)
                 elif file_type=='SALESCUST':
+                    extractType='SALESCUST'
                     df_final=ParseData1.parse_DMS_SalesCust_File(file_data)
                 elif file_type=='INVOICE':
+                    extractType='INVOICE'
                     df_final=ParseData1.parse_DMS_Invoice_File(file_data)
                 elif file_type=='PARTS':
+                    extractType='PARTS'
                     df_final=ParseData1.parse_DMS_Parts_File(file_data)
                 elif file_type=='INVENTORY':
+                    extractType='INVENTORY'
                     df_final=ParseData1.parse_DMS_Inventory_File(file_data)
                 elif file_type=='DEAL':
+                    extractType='DEAL'
                     df_final=ParseData1.parse_DMS_Deal_File(file_data) 
                 elif file_type=='ROHIST':
+                    extractType='ROHIST'
                     df_final=ParseData1.parse_DMS_ROHistory_File(file_data)
                 elif file_type=='ROHISTV1' or file_type=='ROHISTV2':
+                    extractType='ROHIST'
                     df_final=ParseData1.parse_DMS_ROHistory_FileV1(file_data)
                 elif file_type=='TKWIP':
+                    extractType='WIP'
                     df_final=ParseData1.parse_TKION_WIP_File(file_data)
                 elif file_type=='TKPARTS':
+                    extractType='PARTS'
                     df_final=ParseData1.parse_TEKION_Parts_File(file_data)
                 elif file_type=='TKSALESCUST':
+                    extractType='SALESCUST'
                     df_final=ParseData1.parse_TEKION_SalesCust_File(file_data)
                 elif file_type=='MRWIP':
+                    extractType='WIP'
                     df_final=ParseData1.parse_MR_WIP_File(file_data)
                 elif file_type=='MRPARTS':
+                    extractType='PARTS'
                     df_final=ParseData1.parse_MR_Parts_File(file_data)
                 elif file_type=='MRSALESCUST':
+                    extractType='SALESCUST'
                     df_final=ParseData1.parse_MR_SalesCust_File(file_data)
 
                 dao_Obj=DAO.DynamoDBDAO()                
@@ -191,18 +215,48 @@ class RequestProcesserS3():
                             logger.info("Uploaded JSON Data to S3 fileName:"+str(fileName))
                 et = datetime.now()
                 delta=et-st
+                totalProcessDuration=delta.total_seconds()*1000
                 logger.debug("TOTAL PROCESSING TIME="+str(delta.total_seconds()))
                 dbhelper=DBHelper()
                 region=os.environ['REGION']
                 dbhelper.Audit_ExtractDetail(region=region,store_code=store_code,client_id=client_id,partitionKey=partitionKey,fileType=file_type,response=response,start_time=st,end_time=et)
-                return response        
+                       
             else:
                 logger.info("error in Download  Data from S3 fileName:"+str(fileName))   
-                return response
+                response= { "operation_status":"FAILED","error_code":-1 ,"error_message":"error in Download  Data from S3"}  
         except Exception as e:
                    logger.error("Error Occure in Process_KinesStreamRecord......." , exc_info=True)
                    ex_type, ex_value, ex_traceback = sys.exc_info()
-                   return { "operation_status":"FAILED","error_code":-1 ,"error_message":ex_value} 
-                    
+                   response= { "operation_status":"FAILED","error_code":-1 ,"error_message":ex_value} 
+        status='ERROR'            
+        error_message=""
+        total_item_count=0
+        total_item_parsed=0
+        if response['operation_status']=='SUCCESS':
+            status='SUCCESS'  
+            if  "total_item_count" in response:
+                total_item_count=response["total_item_count" ]
+            if  "total_item_parsed" in response:
+                total_item_parsed=response["total_item_parsed" ]    
+                
+        else:
+            if 'error_message'in response and response['operation_status']=='FAILED':
+                error_message=response['error_message']
+
+        logEvent= {
+                "instance" :str(aws_account_id),
+                "fileId":partitionKey,
+                "app": "ETL_S3",
+                "storeCode": store_code,
+                "extractType": extractType,	
+                "status": status,                  
+                "message":error_message,
+                "insertedRecordCount":total_item_parsed,
+                "totalRecordCount":total_item_count,
+                "processDateTime":processDateTime.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "processDurationMS"	:totalProcessDuration
+            }               
+        cwLogger.DoCloudWatchLog('epde/etlLog',logEvent)           
+        return response            
    
         

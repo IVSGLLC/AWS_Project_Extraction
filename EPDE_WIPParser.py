@@ -88,8 +88,8 @@ class WIPParser():
                     dict_ro["COMMENTS"].append(str(row[29:64]))
                     dict_ro["YR"].append(str(row[65:67].strip()))
                     dict_ro["MAKE"].append(str(row[68:78].strip()))
-                    dict_ro["MODEL"].append(str(row[79:90].strip())) 
-                    dict_ro["EPDE.TOTAL.ESTIMATE"].append(str(row[91:].strip())) 
+                    dict_ro["MODEL"].append(str(row[79:89].strip())) 
+                    dict_ro["EPDE.TOTAL.ESTIMATE"].append(str(row[90:].strip())) 
 
             if wip_cust==True and not row=="\n" and not row.startswith(tuple(skip_line_startwith_list)) and not (list(filter(row.__contains__, skip_line_contains_list)) != []):
             #if wip_cust==True and not row=="\n" and not row.startswith("PAGE") and not (row.__contains__("ITEMS SELECTED") ) and not row.startswith(">SORT")  and not (row.__contains__("REFER#") and  row.__contains__("EPDE.CUST") and row.__contains__("CUSTOMER LINE1") and row.__contains__("CITY-STATE-ZIP") and row.__contains__("SERIAL NO") and row.__contains__("CUSTOMER LINE3")):

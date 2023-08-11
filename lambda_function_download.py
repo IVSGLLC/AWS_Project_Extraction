@@ -1,4 +1,8 @@
+import datetime
 import json
+import sys
+import pytz
+from EPDE_CloudWatchLog import CloudWatchLogger
 from EPDE_Error import ErrorHandler
 from EPDE_Logging import LogManger
 from EPDE_Response import ResponseHandler
@@ -12,14 +16,25 @@ err_handler=ErrorHandler()
 def lambda_handler(event, context):
     res_json=""
     resHandler=ResponseHandler()
-    try:
+    cwLogger= CloudWatchLogger()
+    dealers=[]
+    apiList=[]
+    groups=[]
+    dealerCode=''
+    reqAPI=''
+    queue=''
+    dealerGroup=''
+    status='SUCCESS'
+    msg=''
+    allowMsgList=[]
+    queueNm=''
+    totalMessageCount=0
+    time_difference_in_milliseconds=0
+    try:      
+            eastern=pytz.timezone('US/Eastern')           
             _moduleNM="EPDE_Lambda"
             _functionNM="lambda_handler"
-            err_handler.appInfo(moduleNM=_moduleNM,functionNM=_functionNM)
-            dealerCode=''
-            reqAPI=''
-            queue=''
-            dealerGroup=''
+            err_handler.appInfo(moduleNM=_moduleNM,functionNM=_functionNM)  
             try:
                 if 'queryStringParameters' in event:
                     queryStringParameters=event['queryStringParameters']
@@ -40,9 +55,9 @@ def lambda_handler(event, context):
                 dealerCode=''
                 reqAPI=''
                 dealerGroup=''
-            dealers=[]
-            apiList=[]
-            groups=[]
+                status='ERROR'
+                msg='queryStringParameters error'
+          
 
             if len(dealerCode)>0 and  dealerCode.__contains__(","):
                 dealers=dealerCode.split(',')
@@ -70,6 +85,8 @@ def lambda_handler(event, context):
                     access_token=auth_token[1] 
             except:
                 access_token=None
+                status='ERROR'
+                msg='access_token error'
             if access_token is not None:  
                     app_client=AppClient()     
                     config=app_client.GetConfiguration(event)
@@ -104,12 +121,15 @@ def lambda_handler(event, context):
                     postdeposit_manager=DepositsManager(region,table_Per_Store_Post_Deposit)
                     table_Per_Store_Post_Accounting=1
                     postaccounting_manager=AccountingManager(region,table_Per_Store_Post_Accounting)
+                    downloadStart = datetime.now().astimezone(eastern)
                     sqs= SQSManager(queueNm,region,msg_count,wait_time)                  
-                    sqs_resp= sqs.receive_message()
-                    allowMsgList=[]
+                    sqs_resp= sqs.receive_message()                              
+                    time_difference=datetime.now().astimezone(eastern)-downloadStart
+                    time_difference_in_milliseconds = int(time_difference.total_seconds() * 1000)
                     if sqs_resp['status']:
                         messages=sqs_resp['messages']
                         logger.debug("messages="+str(messages))
+                        totalMessageCount=len(messages)
                         for message in messages:
                             logger.debug("message="+str(message))
                             message_body = message["Body"]
@@ -184,24 +204,54 @@ def lambda_handler(event, context):
                                     FileDetail={"dealerCode":store_code,"data":message_body,"fileName":fileName}
                                     allowMsgList.append(FileDetail) 
                                     sqs.delete_message(receipt_handle)
-
+                    else:
+                        status='ERROR'
+                        msg='receiving queue message error'
+                        #error in receiving queue message
+                        ""
                     if len(allowMsgList)>0:
+                        status='SUCCESS'
+                        msg=str(len(allowMsgList))+" message download"
                         if msg_count == 1:
                              res_json=allowMsgList[0]
-                        else: 
-                           
+                        else:                            
                             res_json=allowMsgList
                     else:
+                        if status!='ERROR':
+                            msg="0 message download"
                         res_json=""
-                
+
+                    
             else:
-                 logger.debug("API Key not found...")                  
+                 logger.debug("API Key not found...")  
+                 status='ERROR'
+                 msg='API Key error'
                  res_json= resHandler.GetErrorResponseJSON(331,None)
-            logger.info("Download response="+str(res_json)) 
-            return resHandler.GetAPIResponse(res_json)
+            logger.debug("Download response="+str(res_json))            
     except Exception as e:
+            ex_type, ex_value, ex_traceback = sys.exc_info()
+            status='ERROR'
             logger.error("error occured in lambda_handler",True)
+            msg=str(ex_value)
             res_json= resHandler.GetErrorResponseJSON(313,None)
-            return resHandler.GetAPIResponse(res_json) 
-            
-            
+    aws_account_id = context.invoked_function_arn.split(":")[4]        
+    logEvent={
+        
+                "instance" :str(aws_account_id),
+                "sourceIP":event["identity"]["sourceIp"],
+                "reqApi" :reqAPI,
+                "reqDealerCode":dealerCode,
+                "reqDealerGroup":dealerGroup,
+                "reqQueue": queue,
+                "queueName": queueNm,
+                "stage":event['requestContext']['stage'],
+                "totalMessageCount": totalMessageCount,
+                "status": status,
+                "receiveMessageDateTime":downloadStart.strftime("%Y-%m-%dT%H:%M:%S%z") ,
+                "receiveMessageDurationMS": time_difference_in_milliseconds,
+                "downloadedMessageCount":len(allowMsgList),
+                "message": msg  
+            }     
+    cwLogger.DoCloudWatchLog('epde/downloadLog',logEvent)       
+    return resHandler.GetAPIResponse(res_json)
+        

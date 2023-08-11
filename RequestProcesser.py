@@ -5,8 +5,11 @@ import json
 import logging
 import os
 import sys
+
+import pytz
 from DBHelper import DBHelper
 import DynamoDBDAO as DAO
+from EPDE_CloudWatchLog import CloudWatchLogger
 #from EPDE_SQS import SQSManager
 from EPDE_S3 import S3Manager
 import ParseData as PU
@@ -17,14 +20,26 @@ logger.setLevel(loglevel)
 class RequestProcesser():
      
     @classmethod 
-    def Process_KinesStreamRecord(self,records):
+    def Process_KinesStreamRecord(self,records,aws_account_id):
         logger.debug("Inside Process_KinesStreamRecord function...")
         #if(loglevel==logging.DEBUG):
             #logger.debug("records: JSON:"+json.dumps(records, indent = 1)) 
             #   
+        eastern=pytz.timezone('US/Eastern')   
         st = datetime.now()
+        processDateTime = datetime.now().astimezone(eastern)
         logger.info("KinesStreamRecord Count:"+str(len(records)))
-        for record in records:     
+        reponse_list=[]
+        cwLogger= CloudWatchLogger()
+        for record in records:
+            st = datetime.now()
+            processDateTime = datetime.now().astimezone(eastern)
+            partitionKey=None
+            store_code=''
+            file_type=''
+            extractType=''  
+            df_final={}  
+            totalProcessDuration=0 
             try:
                 # Process your record
                 partitionKey=record['kinesis']['partitionKey']
@@ -85,32 +100,46 @@ class RequestProcesser():
                 #logger.debug("file data as Plain Text:"+file_data) 
                 ParseData1= PU.ParseData()
                 if file_type=='WIP':
+                    extractType='WIP'
                     df_final=ParseData1.parse_DMS_WIP_File(file_data)
                 elif file_type=='SALESCUST':
+                    extractType='SALESCUST'
                     df_final=ParseData1.parse_DMS_SalesCust_File(file_data)
                 elif file_type=='INVOICE':
+                    extractType='INVOICE'
                     df_final=ParseData1.parse_DMS_Invoice_File(file_data)
                 elif file_type=='PARTS':
+                    extractType='PARTS'
                     df_final=ParseData1.parse_DMS_Parts_File(file_data)
                 elif file_type=='INVENTORY':
+                    extractType='INVENTORY'
                     df_final=ParseData1.parse_DMS_Inventory_File(file_data)
                 elif file_type=='DEAL':
+                     extractType='DEAL'
                      df_final=ParseData1.parse_DMS_Deal_File(file_data)
                 elif file_type=='ROHIST':
+                     extractType='ROHIST'
                      df_final=ParseData1.parse_DMS_ROHistory_File(file_data)
                 elif file_type=='ROHISTV1' or file_type=='ROHISTV2':
+                    extractType='ROHIST'
                     df_final=ParseData1.parse_DMS_ROHistory_FileV1(file_data)
                 elif file_type=='TKWIP':
+                    extractType='WIP'
                     df_final=ParseData1.parse_TKION_WIP_File(file_data)
                 elif file_type=='TKPARTS':
+                    extractType='PARTS'
                     df_final=ParseData1.parse_TEKION_Parts_File(file_data)
                 elif file_type=='TKSALESCUST':
+                    extractType='SALESCUST'
                     df_final=ParseData1.parse_TEKION_SalesCust_File(file_data)
                 elif file_type=='MRWIP':
+                    extractType='WIP'
                     df_final=ParseData1.parse_MR_WIP_File(file_data)
                 elif file_type=='MRPARTS':
+                    extractType='PARTS'
                     df_final=ParseData1.parse_MR_Parts_File(file_data)
                 elif file_type=='MRSALESCUST':
+                    extractType='SALESCUST'
                     df_final=ParseData1.parse_MR_SalesCust_File(file_data)
                     
                 dao_Obj=DAO.DynamoDBDAO()
@@ -189,15 +218,46 @@ class RequestProcesser():
                             logger.info("Uploaded JSON Data to S3 fileName:"+str(fileName))
                 et = datetime.now()
                 delta=et-st
+                totalProcessDuration=delta.total_seconds()*1000
                 logger.debug("TOTAL PROCESSING TIME="+str(delta.total_seconds()))
                 dbhelper=DBHelper()
                 region=os.environ['REGION']
                 dbhelper.Audit_ExtractDetail(region=region,store_code=store_code,client_id=client_id,partitionKey=partitionKey,fileType=file_type,response=response,start_time=st,end_time=et)
-                return response
+                #return response
             except Exception as e:
                    logger.error("Error Occure in Process_KinesStreamRecord......." , exc_info=True)
                    ex_type, ex_value, ex_traceback = sys.exc_info()
-                   return { "operation_status":"FAILED","error_code":-1 ,"error_message":ex_value} 
+                   response= { "operation_status":"FAILED","error_code":-1 ,"error_message":ex_value} 
+            reponse_list.append(response)  
+            status='ERROR'            
+            error_message=""
+            total_item_count=0
+            total_item_parsed=0
+            if response['operation_status']=='SUCCESS':
+                status='SUCCESS'  
+                if  "total_item_count" in response:
+                    total_item_count=response["total_item_count" ]
+                if  "total_item_parsed" in response:
+                    total_item_parsed=response["total_item_parsed" ]    
                     
-   
+            else:
+                if 'error_message'in response and response['operation_status']=='FAILED':
+                    error_message=response['error_message']
+           
+               
+            logEvent= {
+                "instance" :str(aws_account_id),
+                "fileId":partitionKey,
+                "app": "ETL_KINESIS",
+                "storeCode": store_code,
+                "extractType": extractType,	
+                "status": status,                  
+                "message":error_message,
+                "insertedRecordCount":total_item_parsed,
+                "totalRecordCount":total_item_count,
+                "processDateTime":processDateTime.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "processDurationMS"	:totalProcessDuration
+            }                  
+            cwLogger.DoCloudWatchLog('epde/etlLog',logEvent)           
+        return reponse_list
         

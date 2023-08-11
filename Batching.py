@@ -68,8 +68,8 @@ def get_batch_data(dynamodb,tableName, item_list):
     }
     try:
         retrieved = do_batch_get(dynamodb,batch_keys)
-        for response_table, response_items in retrieved.items():
-            logger.debug("Got %s items from %s.", len(response_items), response_table)
+        #for response_table, response_items in retrieved.items():
+            #logger.debug("Got %s items from %s.", len(response_items), response_table)
     except ClientError:
         logger.error(
             "Couldn't get items from %s and %s.", tableName)

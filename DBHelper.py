@@ -43,8 +43,8 @@ class DBHelper():
     @classmethod
     def CovertToNumericString(self,val) :
             strval=str(val)
-            if loglevel==logging.DEBUG:
-                        logger.debug("CovertToNumericString:"+strval)
+            # if loglevel==logging.DEBUG:
+            #             logger.debug("CovertToNumericString:"+strval)
             if strval.isnumeric() or strval.isdecimal():
                 return strval
             else:
@@ -108,13 +108,11 @@ class DBHelper():
             batch_items.append(new_items)  
         et = datetime.now()
         delta=et-st
-        logger.debug("Build getBatchList total_seconds="+str(delta.total_seconds()))
+        #logger.debug("Build getBatchList total_seconds="+str(delta.total_seconds()))
         return batch_items  
     @classmethod
     def submitSaveData(self,TableName,items,region='us-east-1',overwrite_by_pkeys=['document_type', 'document_id'],checkForUpdateExisting=False,MAX_PROC=4,BATCH_SIZE=25):
-            # Define the client to interact with AWS Lambda
-            
-            
+            # Define the client to interact with AWS Lambda           
             client_1 = boto3.client('lambda')
             batches =items  #self.chunks(items,lambda_batch_size)                        
             for batch in batches:
@@ -135,7 +133,7 @@ class DBHelper():
                     InvocationType = 'Event',
                     Payload = json.dumps(inputParams)
                 )
-                logger.debug("responseFrom SaveDataHandler Lambda="+str(response))   
+                #logger.debug("responseFrom SaveDataHandler Lambda="+str(response))   
     @classmethod
     def submitSaveDataLocal(self,TableName,items,region='us-east-1',overwrite_by_pkeys=['document_type', 'document_id'],checkForUpdateExisting=False,MAX_PROC=4,BATCH_SIZE=25):
             # Define the client to interact with AWS Lambda
@@ -232,8 +230,7 @@ class DBHelper():
                 if accounts is not None:
                     accNameList=[]
                     for s_acc in accCodeList: 
-                         if s_acc in accounts:
-                           
+                         if s_acc in accounts:                           
                             accNameList.append( ","+str(accounts[s_acc])+")")                
                     if len(accNameList) >0:
                         status=True                 
@@ -248,7 +245,6 @@ class DBHelper():
     def GetAccounts(self,store_code,region):
         try: 
             app_client=AppClient()   
-            accounts=[]     
             store_resp=app_client.GetStoreDetail(store_code,region=region)
             if store_resp['status']:
                 item=store_resp['item']
@@ -277,14 +273,12 @@ class DBHelper():
         TableName=store_code+"_EXTRACT_LOG"
         try:                     
             logger.debug("Audit_ExtractDetail >> partitionKey="+str(partitionKey)) 
-            isAudit=False
-            
+            isAudit=False            
             if 'AUDIT' in os.environ and os.environ['AUDIT'] is not None:
                 isAuditStr= str(os.environ['AUDIT'])  
                 if isAuditStr.lower()=='true':
                     isAudit=True
-                    logger.debug("Audit_ExtractDetail >> isAudit="+str(isAudit)) 
-            
+                    logger.debug("Audit_ExtractDetail >> isAudit="+str(isAudit))             
 
             if partitionKey is not None and len(partitionKey)>0:
                 ct = datetime.now()
@@ -376,8 +370,7 @@ class DBHelper():
             if self.compare_json_objects(obj1=obj11, obj2=obj22,attributes= attributes) != True:
                return False
         return True
-     
- 
+    
     @classmethod
     def compare_json_objects(self,obj1, obj2, attributes):
         for attr in attributes:
@@ -541,7 +534,7 @@ class DBHelper():
                 try:
                     target_minute=int(timeArray[1])
                 except:                   
-                    target_minute=45        
+                    target_minute=45       
 
               
         except:

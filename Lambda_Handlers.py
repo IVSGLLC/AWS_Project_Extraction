@@ -12,11 +12,14 @@ def Process_CaptureData(event, context):
         logger.info("Inside Process_CaptureData function...")
         records = event.get("Records")   
         #if loglevel==logging.DEBUG:  
-           #logger.debug("records: JSON:"+json.dumps(records, indent = 1))   
+        #logger.debug("records:"+str(records))   
+        aws_account_id = context.invoked_function_arn.split(":")[4]      
+       
         kr=req.RequestProcesser()
-        response=kr.Process_KinesStreamRecord(records)
-        operation_status=response.get('operation_status')
-        logger.info("operation_status:"+str(operation_status))
+        response=kr.Process_KinesStreamRecord(records,aws_account_id)
+        if response is not None and len(response)>0:
+            operation_status=response[0].get('operation_status')
+            logger.info("operation_status:"+str(operation_status))
         
     except Exception as e:
            logger.error("Error Occure in Process_CaptureData......." , exc_info=True) 
