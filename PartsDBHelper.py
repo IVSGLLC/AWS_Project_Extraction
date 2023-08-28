@@ -893,9 +893,9 @@ class PartsDBHelper():
                                        employee_id= id["id"]
                         #Extract Customer Info - CustomerParty
                         if 'partyType' in partsInvoiceParty and  partsInvoiceParty['partyType'] == 'CustomerParty': 
-                            customerParty=self.ExtractPartyDetail(partsInvoiceParty)                          
+                            customerParty=self.ExtractPartyDetail(partsInvoiceParty,source)                          
                         if 'partyType' in  partsInvoiceParty and partsInvoiceParty['partyType'] == 'ShipToParty': 
-                            shipToParty=self.ExtractPartyDetail(partsInvoiceParty)  
+                            shipToParty=self.ExtractPartyDetail(partsInvoiceParty,source)  
                         if 'address' in  partsInvoiceParty and len(partsInvoiceParty['address'] )>0:     
                             addressGroups=self.ExtractAddressGroups(partsInvoiceParty=partsInvoiceParty)
                 
@@ -1053,7 +1053,7 @@ class PartsDBHelper():
 
                 parts=[] 
                 totalParts=""
-                totalPartLineFright=None
+                #totalPartLineFright=None
                 if 'partsInvoiceLine' in row and row["partsInvoiceLine"] is not None  and  len(row['partsInvoiceLine'] )>0:
                     for rowParts in row['partsInvoiceLine'] :   
                         if "partsProductItem" in  rowParts:                     
@@ -1089,7 +1089,7 @@ class PartsDBHelper():
                                             netPrice=str(pricing["chargeAmount"]) 
                                         if pricing["priceCode"]=="Freight":
                                             if pricing["chargeAmount"] is not None and len(str(pricing["chargeAmount"])) >0:
-                                                totalPartLineFright=totalPartLineFright+pricing["chargeAmount"]
+                                                #totalPartLineFright=totalPartLineFright+pricing["chargeAmount"]
                                                 Freight=str(pricing["chargeAmount"])
                             part={				
                                 "partsNum":str(partsNum) ,			
@@ -1110,35 +1110,42 @@ class PartsDBHelper():
                     #END FOR PARTS
                     
                 #END IF PARTS
-                dealerDiscountAmount=""
+               
                 poNumber=""
                 totalSaleTax=''
+
                 if "tax" in row and row["tax"] is not None and len(row["tax"])>0:
+                    totalSaleTaxAmt=0.0
                     for tax in row["tax"]:
                         if 'taxAmount' in tax:
-                            totalSaleTax=str(tax['taxAmount'] )
+                            totalSaleTaxAmt=totalSaleTaxAmt+tax['taxAmount']
+                            totalSaleTax=str(round(totalSaleTaxAmt, 2))
 
                 freightTotal=""                 
-                totalFright=None
+                dealerDiscountAmount=""
                 totalPrice=""
                 totalCost=""
                 if "pricing" in row and row["pricing"] is not None and len(row["pricing"])>0:
+                    totalCostAmt=0.0
+                    totalPriceAmt=0.0
+                    freightTotalAmt=0.0
+                    dealerDiscountAmountAmt=0.0
                     for pricing in row["pricing"]:
                         if "priceCode" in pricing and "chargeAmount" in pricing:
                             if pricing["priceCode"]=="TotalCost":
-                                totalCost=str(pricing['chargeAmount'] ) 
+                                totalCostAmt=totalCostAmt+pricing['chargeAmount'] 
+                                totalCost=str(round(totalCostAmt, 2))
                             if pricing["priceCode"]=="TotalPrice":
-                                totalPrice=str(pricing['chargeAmount'] )   
+                                totalPriceAmt=totalPriceAmt+pricing['chargeAmount']   
+                                totalPrice=str(round(totalPriceAmt, 2))
                             if pricing["priceCode"]=="Fright":
-                                freightTotal=str(pricing['chargeAmount'] ) 
-                                totalFright= freightTotal
+                                freightTotalAmt=freightTotalAmt+pricing['chargeAmount'] 
+                                freightTotal=str(round(freightTotalAmt, 2))                                 
                             if pricing["priceCode"]=="DealerDiscountAmount":
-                                dealerDiscountAmount=str(pricing['chargeAmount'] )   
+                                dealerDiscountAmountAmt=dealerDiscountAmountAmt+pricing['chargeAmount']
+                                dealerDiscountAmount=str(round(dealerDiscountAmountAmt, 2))   
 
-                if totalFright is None :
-                    if totalPartLineFright is not None:
-                        freightTotal=str(totalPartLineFright)
-                
+              
                 contactPhone=homePhone
                 if contactPhone == None or contactPhone =="":
                    contactPhone=workPhone
@@ -1426,7 +1433,10 @@ class PartsDBHelper():
                 }
 
     @classmethod
-    def ExtractPartyDetail(self,partsInvoiceParty):
+    def ExtractPartyDetail(self,partsInvoiceParty,source):
+        idType='Other'
+        #if source=='automate':
+              #idType='Other'
         primaryContact=None
         customerId=None
         partyDetail=self.ExtractCustomerDetail(partsInvoiceParty)
@@ -1437,7 +1447,7 @@ class PartsDBHelper():
         if 'idList' in partsInvoiceParty and len(partsInvoiceParty["idList"])>0:  
             idList=partsInvoiceParty['idList']                                  
             for id in idList:
-                if 'typeId' in id and 'id' in id and id['typeId'] == 'DMSId': 
+                if 'typeId' in id and 'id' in id and id['typeId'] == idType: 
                     customerId= id["id"]                                    
                     break
         address_groups=self.ExtractAddressGroups(partsInvoiceParty)               

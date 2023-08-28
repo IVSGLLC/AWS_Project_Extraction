@@ -140,6 +140,28 @@ class RequestProcesserS3():
                 elif file_type=='MRSALESCUST':
                     extractType='SALESCUST'
                     df_final=ParseData1.parse_MR_SalesCust_File(file_data)
+                elif file_type=='ULIST':
+                    extractType='ULIST'    
+                    try:               
+                        region=os.environ['REGION']
+                        s3=S3Manager(region)
+                        parsedFile_folder= 'sessioncount_files' 
+                        bucketName='epde-data-files'                     
+                        fileName=parsedFile_folder+"/"+ str(partitionKey)+".txt"   
+                        s3.uploadFile(bucketName=bucketName,fileName=fileName,content=file_data)
+                    except:
+                        logger.error("Error Occure in Process_S3StreamRecord......." , exc_info=True)
+                elif file_type=='LOGFAIL' :
+                    extractType='LOGFAIL'    
+                    try:               
+                        region=os.environ['REGION']
+                        s3=S3Manager(region)
+                        parsedFile_folder= 'loginfail_files' 
+                        bucketName='epde-data-files'                     
+                        fileName=parsedFile_folder+"/"+ str(partitionKey)+".txt"   
+                        s3.uploadFile(bucketName=bucketName,fileName=fileName,content=file_data)
+                    except:
+                        logger.error("Error Occure in Process_KinesisStreamRecord......." , exc_info=True)      
 
                 dao_Obj=DAO.DynamoDBDAO()                
                 response= { "operation_status":"FAILED","error_code":-1 ,"error_message":"Unrecognised file found."} 
@@ -170,7 +192,10 @@ class RequestProcesserS3():
                 elif file_type=='MRPARTS':
                     response= dao_Obj.SavePartsMR(store_code,df_final,client_id)   
                 elif file_type=='MRSALESCUST':
-                    response= dao_Obj.SaveSalesCustMR(store_code,df_final,client_id)    
+                    response= dao_Obj.SaveSalesCustMR(store_code,df_final,client_id) 
+                elif file_type=='ULIST' or file_type=='LOGFAIL':
+                    response= { "operation_status":"SUCCESS","total_item_count":str(0),"total_item_parsed":str(0),"items":[]} 
+
                 if response['operation_status']=="SUCCESS":
                                         
                     keep_raw=str(os.environ['KEEP_DMS_RAW_FILES_IN_S3'])
@@ -184,7 +209,7 @@ class RequestProcesserS3():
                         s3=S3Manager(region)
                         issued = datetime.now()
                         folder_suffix = issued.strftime("%Y/%m/%d")                         
-                        region=os.environ['REGION']                        
+                                           
                         allowStore=True
                         if 'TRACE_STORE_ID' in os:
                             TRACE_STORE_ID_STR= str(os.environ['TRACE_STORE_ID']) 
@@ -222,7 +247,7 @@ class RequestProcesserS3():
                 dbhelper.Audit_ExtractDetail(region=region,store_code=store_code,client_id=client_id,partitionKey=partitionKey,fileType=file_type,response=response,start_time=st,end_time=et)
                        
             else:
-                logger.info("error in Download  Data from S3 fileName:"+str(fileName))   
+                logger.error("error in Download  Data from S3 fileName:"+str(fileName))   
                 response= { "operation_status":"FAILED","error_code":-1 ,"error_message":"error in Download  Data from S3"}  
         except Exception as e:
                    logger.error("Error Occure in Process_KinesStreamRecord......." , exc_info=True)

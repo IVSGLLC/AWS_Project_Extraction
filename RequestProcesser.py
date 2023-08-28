@@ -141,7 +141,28 @@ class RequestProcesser():
                 elif file_type=='MRSALESCUST':
                     extractType='SALESCUST'
                     df_final=ParseData1.parse_MR_SalesCust_File(file_data)
-                    
+                elif file_type=='ULIST' :
+                    extractType='ULIST'    
+                    try:               
+                        region=os.environ['REGION']
+                        s3=S3Manager(region)
+                        parsedFile_folder= 'session_files' 
+                        bucketName='epde-data-files'                     
+                        fileName=parsedFile_folder+"/"+ str(partitionKey)+".txt"   
+                        s3.uploadFile(bucketName=bucketName,fileName=fileName,content=file_data)
+                    except:
+                        logger.error("Error Occure in Process_KinesisStreamRecord......." , exc_info=True)   
+                elif file_type=='LOGFAIL' :
+                    extractType='LOGFAIL'    
+                    try:               
+                        region=os.environ['REGION']
+                        s3=S3Manager(region)
+                        parsedFile_folder= 'loginfail_files' 
+                        bucketName='epde-data-files'                     
+                        fileName=parsedFile_folder+"/"+ str(partitionKey)+".txt"   
+                        s3.uploadFile(bucketName=bucketName,fileName=fileName,content=file_data)
+                    except:
+                        logger.error("Error Occure in Process_KinesisStreamRecord......." , exc_info=True) 
                 dao_Obj=DAO.DynamoDBDAO()
                 
                 response= { "operation_status":"FAILED","error_code":-1 ,"error_message":"Unrecognised file found."} 
@@ -173,7 +194,9 @@ class RequestProcesser():
                     response= dao_Obj.SavePartsMR(store_code,df_final,client_id)   
                 elif file_type=='MRSALESCUST':
                     response= dao_Obj.SaveSalesCustMR(store_code,df_final,client_id)
-
+                elif file_type=='ULIST' or file_type=='LOGFAIL':
+                    response= { "operation_status":"SUCCESS","total_item_count":str(0),"total_item_parsed":str(0),"items":[]} 
+                
                 if response['operation_status']=="SUCCESS":
                                        
                     keep_raw=str(os.environ['KEEP_DMS_RAW_FILES_IN_S3'])

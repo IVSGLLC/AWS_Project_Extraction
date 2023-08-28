@@ -77,8 +77,8 @@ class WIPParser():
                 if len(row[0:8].strip())==0 :
                     if len(row[68:78].strip())>0:
                         dict_ro["MAKE"][(len(dict_ro["MAKE"])-1)] = (dict_ro["MAKE"][(len(dict_ro["MAKE"])-1)] + str(row[68:78].strip())) 
-                    if len(row[79:90].strip())>0:
-                        dict_ro["MODEL"][(len(dict_ro["MODEL"])-1)] = (dict_ro["MODEL"][(len(dict_ro["MODEL"])-1)] + str(row[79:90].strip()))
+                    if len(row[79:89].strip())>0:
+                        dict_ro["MODEL"][(len(dict_ro["MODEL"])-1)] = (dict_ro["MODEL"][(len(dict_ro["MODEL"])-1)] + str(row[79:89].strip()))
                     if len(row[29:64].strip())>0:
                         dict_ro["COMMENTS"][(len(dict_ro["COMMENTS"])-1)] = (dict_ro["COMMENTS"][(len(dict_ro["COMMENTS"])-1)] +' '+ str(row[29:64])) 
                 else:

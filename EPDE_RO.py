@@ -445,7 +445,7 @@ class RepairOrder(object):
             store_resp=app_client.GetStoreDetail(store_code,region=region)
             if store_resp['status']==False:
                return store_resp
-            ro_resp=self.GetROList(store_code,'RO',None,-1)           
+            ro_resp=self.GetROList(store_code,'RO',None,None,-1)           
             store_detail=store_resp['item']
             store_code=store_detail['store_code']
             StoreName=store_detail['store_name']

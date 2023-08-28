@@ -39,8 +39,7 @@ class DepositsManager(object):
         try:
             _moduleNM="DepositsManager"
             _functionNM="GetDepositsEntry"
-            self.logger.debug("GetDepositsEntry>> store_code="+str(store_code)+",fileId="+str(fileId))
-           
+            self.logger.debug("GetDepositsEntry>> store_code="+str(store_code)+",fileId="+str(fileId))           
             dynamodb = boto3.resource('dynamodb', region_name=DepositsManager.region)
             TableName=self.GetTableName(store_code)
             table = dynamodb.Table(TableName)
@@ -50,7 +49,9 @@ class DepositsManager(object):
                 if 'request_json' in item:
                     item['request_json']=self.readLargeData(data=item['request_json'])
                 if 'response_json' in item:
-                    item['response_json']=self.readLargeData(data=item['response_json'])                    
+                    item['response_json']=self.readLargeData(data=item['response_json'])  
+                if 'process_logs'  in item: 
+                    item['process_logs']= self.readLargeData(data=item['process_logs'])                    
                 return { "status":True,"item": item } 
             except KeyError as kerr:         
                return self.err_handler.HandleAppError(356,moduleNM=_moduleNM,functionNM=_functionNM)   
@@ -70,18 +71,23 @@ class DepositsManager(object):
           
     @classmethod
     def readLargeData(self,data):
+        #self.logger.debug("GetProcessLogs >> data="+str(data))
         if data is None or len(data)==0 :
             return data
         if isinstance(data, (str)):   
-            return data               
-        large_pay_load_attribute_value = data.get('EPDELargePayload',None)
-        if large_pay_load_attribute_value:
-            compressed_data= data.get('EPDELargePayload',None)
-            decompressed_data = gzip.decompress(compressed_data)  
-            if isinstance(decompressed_data, (bytes, bytearray)):
-                decompressed_data=decompressed_data.decode()   
+            return data    
+        if 'EPDELargePayload' in data :           
+            large_pay_load_attribute_value = data.get('EPDELargePayload',None)
+            #self.logger.debug("GetProcessLogs >> large_pay_load_attribute_value="+str(large_pay_load_attribute_value))
+            if large_pay_load_attribute_value:
+                compressed_data= data.get('EPDELargePayload',None)
+                decompressed_data = gzip.decompress(compressed_data)  
+                if isinstance(decompressed_data, (bytes, bytearray)):
+                    decompressed_data=decompressed_data.decode()   
+            else:
+                decompressed_data=data
         else:
-            decompressed_data=data
+             decompressed_data=data
         return decompressed_data 
 
     @classmethod
@@ -95,14 +101,15 @@ class DepositsManager(object):
             TableName=self.GetTableName(store_code)
             table = dynamodb.Table(TableName)
             response = table.get_item(Key={'file_id': fileId},ConsistentRead=True)
+            #self.logger.debug("GetProcessLogs >> response="+str(response))
             try:
-                item = response['Item'] 
+                item = response['Item']                 
                 if 'process_logs'  in item: 
-                    process_logs=self.readLargeData(item['process_logs'])
+                    process_logs=self.readLargeData(data=item['process_logs'])                 
                 return process_logs
-            except KeyError as kerr:         
+            except KeyError as kerr:                     
                return process_logs  
-        except Exception as e:
+        except Exception as e:                    
                return process_logs    
     @classmethod
     def SavePostDeposits(self,post_dict):  
@@ -158,10 +165,8 @@ class DepositsManager(object):
             lt = datetime.datetime.now()
             log_time = lt.timestamp()
             process_logs=[]
-            process_log={"log_time":str(log_time), "request_status":post_dict['request_status'],"response_json":post_dict['response_json'],"comments":"Request Created"}
-            process_logs.append(process_log)
-            
-                        
+            process_log={"log_time":str(log_time), "request_status":post_dict['request_status'],"comments":"Request Created"}
+            process_logs.append(process_log)                       
             dynamodb = boto3.resource('dynamodb', region_name=DepositsManager.region)
             store_code=post_dict['store_code']
             TableName=self.GetTableName(store_code)
@@ -221,10 +226,7 @@ class DepositsManager(object):
             return {"status":True,"request_json": Deposits}
         except Exception as e:
             return self.err_handler.HandleGeneralError(moduleNM=_moduleNM,functionNM=_functionNM)
-    
-    
      
-    
     @classmethod
     def UpdatePostDeposits(self,store_code,fileId,req_status,response_json):
         _moduleNM="DepositsManager"
@@ -236,9 +238,8 @@ class DepositsManager(object):
             #Added 11/30/2022 for keep Processing History for each UpdatePostDeposits Request    
             process_logs=self.GetProcessLogs(store_code=store_code,fileId=fileId)
             comments="Update request_status="+str(req_status)
-            process_log={"log_time":str(res_ts), "request_status":str(req_status),"response_json":response_json,"comments":comments}
+            process_log={"log_time":str(res_ts), "request_status":str(req_status),"comments":comments}
             process_logs.append(process_log)
-
             dynamodb = boto3.resource('dynamodb', region_name=DepositsManager.region)
             TableName=self.GetTableName(store_code)
             table = dynamodb.Table(TableName)
@@ -257,8 +258,7 @@ class DepositsManager(object):
                             ReturnValues="UPDATED_NEW"         
                         )
             #self.logger.debug("response:"+str(response))
-            return { "status":True } 
-            
+            return { "status":True }             
         except Exception as e:
             return self.err_handler.HandleGeneralError(moduleNM=_moduleNM,functionNM=_functionNM)
     
@@ -273,10 +273,8 @@ class DepositsManager(object):
             #Added 11/30/2022 for keep Processing History for each UpdatePostDeposits Request    
             process_logs=self.GetProcessLogs(store_code=store_code,fileId=fileId)
             comments="update timeOut=True,request_status="+str(req_status)
-            process_log={"log_time":str(res_ts), "request_status":str(req_status),"response_json":response_json,"comments":comments}
-            process_logs.append(process_log)
-
-            
+            process_log={"log_time":str(res_ts), "request_status":str(req_status),"comments":comments}
+            process_logs.append(process_log)            
             dynamodb = boto3.resource('dynamodb', region_name=DepositsManager.region)
             TableName=self.GetTableName(store_code)
             table = dynamodb.Table(TableName)
@@ -309,9 +307,8 @@ class DepositsManager(object):
             #Added 11/30/2022 for keep Processing History for each UpdatePostDeposits Request    
             process_logs=self.GetProcessLogs(store_code=store_code,fileId=fileId)
             comments="update request_status ="+str(req_status)
-            process_log={"log_time":str(res_ts), "request_status":str(req_status),"response_json":"","comments":comments}
+            process_log={"log_time":str(res_ts),"request_status":str(req_status),"comments":comments}
             process_logs.append(process_log)
-
             dynamodb = boto3.resource('dynamodb', region_name=DepositsManager.region)
             TableName=self.GetTableName(store_code)
             table = dynamodb.Table(TableName)
@@ -343,7 +340,10 @@ class DepositsManager(object):
             #Added 11/30/2022 for keep Processing History for each Deposit Request    
             process_logs=self.GetProcessLogs(store_code=store_code,fileId=file_id)
             comments="update retry_count ="+str(retry_count)
-            process_log={"log_time":str(res_ts),"request_status":"","response_json":"","comments":comments}
+            request_status=''
+            if len(process_logs)>0:
+               request_status=process_logs[len(process_logs)-1]["request_status"]                
+            process_log={"log_time":str(res_ts),"request_status":request_status,"comments":comments}
             process_logs.append(process_log)
             dynamodb = boto3.resource('dynamodb', region_name=DepositsManager.region)
             TableName=self.GetTableName(store_code)
@@ -481,8 +481,7 @@ class DepositsManager(object):
         except Exception as e:            
             res= self.err_handler.HandleGeneralError(moduleNM=_moduleNM,functionNM=_functionNM)
             return res_handler.GetErrorResponseJSON(code=res['error_code'],auth_json=auth_json) 
-    
-    
+      
     @classmethod
     def PollPostDepositResponse(self,store_code,file_id,auth_json,RequestTimeOutInSecond=20,ResponseQueueName="EPDE_PostPayment_Response.fifo",region="us-east-1",MaxMsgCount=1,waitTimeInSecond=10):
        #_moduleNM="DepositManager"
@@ -609,7 +608,9 @@ class DepositsManager(object):
                                 if 'request_json' in item:
                                     item['request_json']=self.readLargeData(data=item['request_json'])
                                 if 'response_json' in item:
-                                    item['response_json']=self.readLargeData(data=item['response_json'])     
+                                    item['response_json']=self.readLargeData(data=item['response_json']) 
+                                if 'process_logs'  in item: 
+                                    item['process_logs']= self.readLargeData(data=item['process_logs'])      
                                  
                     return { "status":True,"items": items }
             except:

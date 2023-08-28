@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 import json
 import sys
 import pytz
@@ -27,11 +27,13 @@ def lambda_handler(event, context):
     status='SUCCESS'
     msg=''
     allowMsgList=[]
+    logMsgList=[]
     queueNm=''
     totalMessageCount=0
     time_difference_in_milliseconds=0
     try:      
-            eastern=pytz.timezone('US/Eastern')           
+            eastern=pytz.timezone('US/Eastern')   
+            downloadStart = datetime.now().astimezone(eastern)        
             _moduleNM="EPDE_Lambda"
             _functionNM="lambda_handler"
             err_handler.appInfo(moduleNM=_moduleNM,functionNM=_functionNM)  
@@ -121,11 +123,10 @@ def lambda_handler(event, context):
                     postdeposit_manager=DepositsManager(region,table_Per_Store_Post_Deposit)
                     table_Per_Store_Post_Accounting=1
                     postaccounting_manager=AccountingManager(region,table_Per_Store_Post_Accounting)
-                    downloadStart = datetime.now().astimezone(eastern)
+                    
                     sqs= SQSManager(queueNm,region,msg_count,wait_time)                  
                     sqs_resp= sqs.receive_message()                              
-                    time_difference=datetime.now().astimezone(eastern)-downloadStart
-                    time_difference_in_milliseconds = int(time_difference.total_seconds() * 1000)
+                   
                     if sqs_resp['status']:
                         messages=sqs_resp['messages']
                         logger.debug("messages="+str(messages))
@@ -178,6 +179,8 @@ def lambda_handler(event, context):
                                    fileName=store_code+"_postpaymentsRequest_"+fileId+".json" 
                                    FileDetail={"dealerCode":store_code,"data":message_body,"fileName":fileName}
                                    allowMsgList.append(FileDetail)
+                                   LogDetail={"dealerCode":store_code,"api":api,"fileId":fileId}
+                                   logMsgList.append(LogDetail)                                   
                                    sqs.delete_message(receipt_handle)                                
                                    post_manager.UpdatePostPaymentRequestStatus(store_code,fileId,"REQUEST_DOWNLOADED")
                
@@ -185,6 +188,8 @@ def lambda_handler(event, context):
                                    fileName=store_code+"_postdepositsRequest_"+fileId+".json"  
                                    FileDetail={"dealerCode":store_code,"data":message_body,"fileName":fileName}
                                    allowMsgList.append(FileDetail)
+                                   LogDetail={"dealerCode":store_code,"api":api,"fileId":fileId}
+                                   logMsgList.append(LogDetail) 
                                    sqs.delete_message(receipt_handle)                                
                                    postdeposit_manager.UpdatePostDepositsRequestStatus(store_code,fileId,"REQUEST_DOWNLOADED")
                
@@ -192,17 +197,23 @@ def lambda_handler(event, context):
                                    fileName=store_code+"_postaccountingRequest_"+fileId+".json"  
                                    FileDetail={"dealerCode":store_code,"data":message_body,"fileName":fileName}
                                    allowMsgList.append(FileDetail)
+                                   LogDetail={"dealerCode":store_code,"api":api,"fileId":fileId}
+                                   logMsgList.append(LogDetail) 
                                    sqs.delete_message(receipt_handle)                                
                                    postaccounting_manager.UpdatePostAccountingRequestStatus(store_code,fileId,"REQUEST_DOWNLOADED")                        
                                 elif api=='dataextraction':                                     
                                     fileName=fileId
                                     FileDetail={"dealerCode":store_code,"data":message_body,"fileName":fileName}
                                     allowMsgList.append(FileDetail) 
+                                    LogDetail={"dealerCode":store_code,"api":api,"fileId":fileId}
+                                    logMsgList.append(LogDetail) 
                                     sqs.delete_message(receipt_handle)
                                 elif api=='autoupdate':                                    
                                     fileName=fileId
                                     FileDetail={"dealerCode":store_code,"data":message_body,"fileName":fileName}
                                     allowMsgList.append(FileDetail) 
+                                    LogDetail={"dealerCode":store_code,"api":api,"fileId":fileId}
+                                    logMsgList.append(LogDetail) 
                                     sqs.delete_message(receipt_handle)
                     else:
                         status='ERROR'
@@ -234,11 +245,14 @@ def lambda_handler(event, context):
             logger.error("error occured in lambda_handler",True)
             msg=str(ex_value)
             res_json= resHandler.GetErrorResponseJSON(313,None)
-    aws_account_id = context.invoked_function_arn.split(":")[4]        
+    aws_account_id = context.invoked_function_arn.split(":")[4]   
+    #logger.debug("event="+str(event))   
+    time_difference=datetime.now().astimezone(eastern)-downloadStart
+    time_difference_in_milliseconds = int(time_difference.total_seconds() * 1000)   
     logEvent={
         
                 "instance" :str(aws_account_id),
-                "sourceIP":event["identity"]["sourceIp"],
+                "sourceIP":event["requestContext"]["identity"]["sourceIp"],
                 "reqApi" :reqAPI,
                 "reqDealerCode":dealerCode,
                 "reqDealerGroup":dealerGroup,
@@ -250,7 +264,8 @@ def lambda_handler(event, context):
                 "receiveMessageDateTime":downloadStart.strftime("%Y-%m-%dT%H:%M:%S%z") ,
                 "receiveMessageDurationMS": time_difference_in_milliseconds,
                 "downloadedMessageCount":len(allowMsgList),
-                "message": msg  
+                "message": msg,
+                "logMsgList":logMsgList
             }     
     cwLogger.DoCloudWatchLog('epde/downloadLog',logEvent)       
     return resHandler.GetAPIResponse(res_json)

@@ -1,5 +1,9 @@
 
+from datetime import datetime
 import json
+import sys
+import pytz
+from EPDE_CloudWatchLog import CloudWatchLogger
 from EPDE_Deposits import DepositsManager
 from EPDE_Error import ErrorHandler
 from EPDE_Logging import LogManger
@@ -15,7 +19,19 @@ err_handler=ErrorHandler()
 def lambda_handler(event, context):
     res_json=""
     resHandler=ResponseHandler()
+    cwLogger= CloudWatchLogger()
+    api=""
+    fileId=""
+    store_code=""
+    log_api=""
+    log_fileId=""
+    log_status="ERROR"
+    log_dealerCode=""
+    log_msg=""
+    uploadStart=''
     try:
+            eastern=pytz.timezone('US/Eastern')  
+            uploadStart = datetime.now().astimezone(eastern)
             app_client=AppClient()
             config=app_client.GetConfiguration(event)            
             region=config['REGION']
@@ -101,12 +117,12 @@ def lambda_handler(event, context):
                             if api == 'postaccountingResponse':
                                 att={"api": 'postaccounting'} 
                             postResponse.update(att)
+                        
                    except:
-                         ""
+                        ""
                    logger.debug("postresponse ="+str(postResponse))         
                    #sqs_resp= sqs.send_message(postResponse,store_code,fileId) will send response to sqs not in use
-                        
-                   
+                                  
                    
                    #api=postResponse['api']
                    client_id=None
@@ -116,19 +132,63 @@ def lambda_handler(event, context):
                             if store_resp['status']:
                                 client_id=store_resp['item']['client_id'] """                            
                         res_json=post_manager.UpdatePostPayment(store_code,fileId,"RESPONSE_UPLOADED",postResponse)
+                        log_status="SUCCESS"
+                        log_fileId=fileId
+                        log_dealerCode=store_code
+                        log_msg="RESPONSE_UPLOADED"
+                        if postResponse is not None and  'api' in postResponse:
+                           log_api=postResponse['api']  
+
                    elif api == 'postdepositsResponse':                         
                         res_json=deposit_manager.UpdatePostDeposits(store_code,fileId,"RESPONSE_UPLOADED",postResponse)
+                        log_status="SUCCESS"
+                        log_fileId=fileId
+                        log_dealerCode=store_code
+                        log_msg="RESPONSE_UPLOADED"
+                        if postResponse is not None and  'api' in postResponse:
+                           log_api=postResponse['api']  
                    elif api == 'postaccountingResponse':                         
                         res_json=postaccounting_manager.UpdatePostAccounting(store_code,fileId,"RESPONSE_UPLOADED",postResponse)
+                        log_status="SUCCESS"
+                        log_fileId=fileId
+                        log_dealerCode=store_code
+                        log_msg="RESPONSE_UPLOADED"
+                        if postResponse is not None and  'api' in postResponse:
+                           log_api=postResponse['api']  
                    else:
-                       res_json= resHandler.GetErrorResponseJSON(344,None)    
+                        log_status="ERROR"                       
+                        res_json= resHandler.GetErrorResponseJSON(344,None)  
+                        log_msg=res_json['errorList'][0]['message']  
                     #else:
                     #   res_json=sqs_resp 
             else:
-                 logger.debug("API Key not found...")                  
-                 res_json= resHandler.GetErrorResponseJSON(331,None)             
-            return resHandler.GetAPIResponse(res_json)
+                 logger.debug("API Key not found...")
+                 log_status='ERROR'
+                 res_json= resHandler.GetErrorResponseJSON(331,None)  
+                 log_msg=res_json['errorList'][0]['message']            
+            #return resHandler.GetAPIResponse(res_json)
     except Exception as e:
+            ex_type, ex_value, ex_traceback = sys.exc_info()
+            log_status='ERROR'             
             logger.error("error occured in lambda_handler",True)
+            log_msg=str(ex_value)
             res_json= resHandler.GetErrorResponseJSON(313,None)
-            return resHandler.GetAPIResponse(res_json) 
+    aws_account_id = context.invoked_function_arn.split(":")[4]  
+    time_difference=datetime.now().astimezone(eastern)-uploadStart
+    time_difference_in_milliseconds = int(time_difference.total_seconds() * 1000) 
+    logEvent={
+        
+                "instance" :str(aws_account_id),
+                "sourceIP":event["requestContext"]["identity"]["sourceIp"],
+                "api" :log_api,
+                "dealerCode":log_dealerCode,
+                "fileId":log_fileId,
+                "stage":event['requestContext']['stage'],
+                "status": log_status,
+                "uploadMessageDateTime":uploadStart.strftime("%Y-%m-%dT%H:%M:%S%z") ,
+                "uploadMessageDurationMS": time_difference_in_milliseconds,                
+                "message": log_msg,
+               
+            }     
+    cwLogger.DoCloudWatchLog('epde/uploadLog',logEvent)
+    return resHandler.GetAPIResponse(res_json)

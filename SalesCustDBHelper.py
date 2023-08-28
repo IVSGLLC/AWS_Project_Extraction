@@ -126,6 +126,7 @@ class SalesCustDBHelper():
     @classmethod
     def GetDealStatusMapping(self,store_code):
         filters=[]
+        source=""
         app_client=AppClient()
         region=os.environ['REGION']  
         store_resp=app_client.GetStoreDetail(store_code,region=region)
@@ -133,7 +134,10 @@ class SalesCustDBHelper():
             item=store_resp['item']
             if 'deal_status_mapping' in item:
                 filters=item['deal_status_mapping']
-        return filters
+            if 'source' in item:
+                source=item['source']    
+        return {'statusMap':filters,'source':source}
+         
     def FormatDateNew(open_dt_str,print_time_seconds_str):
         try:
                     
@@ -178,7 +182,9 @@ class SalesCustDBHelper():
             create_date = ct.strftime("%Y-%m-%d %I:%M:%S %p")
             create_date_only = ct.strftime("%Y-%m-%d")
             recount=0
-            statusMap=self.GetDealStatusMapping(store_code)
+            resp_mapping=self.GetDealStatusMapping(store_code)
+            statusMap=resp_mapping['statusMap']
+            source=resp_mapping['source']
             #typeMap=self.GetDealTypeMapping(store_code,region)
             for row in json_deals:
                 recount=recount+1
@@ -249,7 +255,7 @@ class SalesCustDBHelper():
                 if 'dealParties' in row and len(row["dealParties"])>0:                
                     for dealParty in row['dealParties']:
                         if 'partyType' in dealParty and  dealParty['partyType'] == 'Buyer':   
-                            customerParty=self.ExtractPartyDetail(dealParty)  
+                            customerParty=self.ExtractPartyDetail(dealParty,source)  
 
                 if customerParty is not None:
                     if 'partyId' in customerParty and customerParty['partyId'] is not None:
@@ -449,7 +455,11 @@ class SalesCustDBHelper():
                 }
 
     @classmethod
-    def ExtractPartyDetail(self,partsInvoiceParty):
+    def ExtractPartyDetail(self,partsInvoiceParty,source):
+        idType='Other'
+        #if source=='automate':
+              #idType='Other'
+
         primaryContact=None
         customerId=None
         partyDetail=self.ExtractCustomerDetail(partsInvoiceParty)
@@ -460,7 +470,7 @@ class SalesCustDBHelper():
         if 'idList' in partsInvoiceParty and len(partsInvoiceParty["idList"])>0:  
             idList=partsInvoiceParty['idList']                                  
             for id in idList:
-                if 'typeId' in id and 'id' in id and id['typeId'] == 'DMSId': 
+                if 'typeId' in id and 'id' in id and id['typeId'] == idType: 
                     customerId= id["id"]                                    
                     break
               
@@ -487,7 +497,8 @@ class SalesCustDBHelper():
             create_date = ct.strftime("%Y-%m-%d %I:%M:%S %p")
             create_date_only = ct.strftime("%Y-%m-%d")
             recount=0
-            statusMap=self.GetDealStatusMapping(store_code)
+            resp_mapping=self.GetDealStatusMapping(store_code)
+            statusMap=resp_mapping['statusMap']
             #typeMap=self.GetDealTypeMapping(store_code,region)
             for row in json_deals['data']:
                 recount=recount+1

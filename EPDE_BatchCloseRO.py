@@ -46,19 +46,24 @@ class BatchCloseRO(object):
           
     @classmethod
     def readLargeData(self,data):
+        #self.logger.debug("GetProcessLogs >> data="+str(data))
         if data is None or len(data)==0 :
             return data
         if isinstance(data, (str)):   
-            return data               
-        large_pay_load_attribute_value = data.get('EPDELargePayload',None)
-        if large_pay_load_attribute_value:
-            compressed_data= data.get('EPDELargePayload',None)
-            decompressed_data = gzip.decompress(compressed_data)  
-            if isinstance(decompressed_data, (bytes, bytearray)):
-                decompressed_data=decompressed_data.decode()   
+            return data    
+        if 'EPDELargePayload' in data :           
+            large_pay_load_attribute_value = data.get('EPDELargePayload',None)
+            #self.logger.debug("GetProcessLogs >> large_pay_load_attribute_value="+str(large_pay_load_attribute_value))
+            if large_pay_load_attribute_value:
+                compressed_data= data.get('EPDELargePayload',None)
+                decompressed_data = gzip.decompress(compressed_data)  
+                if isinstance(decompressed_data, (bytes, bytearray)):
+                    decompressed_data=decompressed_data.decode()   
+            else:
+                decompressed_data=data
         else:
-            decompressed_data=data
-        return decompressed_data   
+             decompressed_data=data
+        return decompressed_data 
         
     @classmethod     
     def GetTableName(self,store_code):         
@@ -79,7 +84,9 @@ class BatchCloseRO(object):
                 if 'request_json' in item:
                     item['request_json']=self.readLargeData(data=item['request_json'])
                 if 'response_json' in item:
-                    item['response_json']=self.readLargeData(data=item['response_json'])    
+                    item['response_json']=self.readLargeData(data=item['response_json']) 
+                if 'process_logs' in item:
+                    item['process_logs']=self.readLargeData(data=item['process_logs'])    
                 return { "status":True,"item": item } 
             except KeyError as kerr:         
                return self.err_handler.HandleAppError(356,moduleNM=_moduleNM,functionNM=_functionNM)   
@@ -163,9 +170,8 @@ class BatchCloseRO(object):
             lt = datetime.datetime.now()
             log_time = lt.timestamp()
             process_logs=[]
-            process_log={"log_time":str(log_time), "request_status":post_dict['request_status'],"response_json":post_dict['response_json'],"comments":"Request Created"}
-            process_logs.append(process_log)
-            
+            process_log={"log_time":str(log_time), "request_status":post_dict['request_status'],"comments":"Request Created"}
+            process_logs.append(process_log)           
 
             # Get the service resource.             
             dynamodb = boto3.resource('dynamodb', region_name=BatchCloseRO.region)
@@ -250,9 +256,7 @@ class BatchCloseRO(object):
             return {"status":True,"request_json": Payments}
         except Exception as e:
             return self.err_handler.HandleGeneralError(moduleNM=_moduleNM,functionNM=_functionNM)    
-    
-    
-    
+      
     @classmethod
     def UpdateBatchCloseRO(self,store_code,fileId,req_status,response_json):
         _moduleNM="BatchCloseRO"
@@ -265,9 +269,8 @@ class BatchCloseRO(object):
             #Added 11/30/2022 for keep Processing History for each BatchClose RO Request    
             process_logs=self.GetBatchCloseROProcessLogs(store_code=store_code,fileId=fileId)
             comments="Update request_status="+str(req_status)
-            process_log={"log_time":str(res_ts), "request_status":str(req_status),"response_json": response_json,"comments":comments}
-            process_logs.append(process_log)
-            
+            process_log={"log_time":str(res_ts), "request_status":str(req_status),"comments":comments}
+            process_logs.append(process_log)            
             
             dynamodb = boto3.resource('dynamodb', region_name=BatchCloseRO.region)
             TableName=self.GetTableName(store_code)
@@ -302,9 +305,8 @@ class BatchCloseRO(object):
             #Added 11/30/2022 for keep Processing History for each BatchClose RO Request    
             process_logs=self.GetBatchCloseROProcessLogs(store_code=store_code,fileId=fileId)
             comments="update timeOut=True, request_status="+str(req_status)
-            process_log={"log_time":str(res_ts), "request_status":str(req_status),"response_json":response_json,"comments":comments}
-            process_logs.append(process_log)
-            
+            process_log={"log_time":str(res_ts), "request_status":str(req_status),"comments":comments}
+            process_logs.append(process_log)            
             dynamodb = boto3.resource('dynamodb', region_name=BatchCloseRO.region)
             TableName=self.GetTableName(store_code)
             table = dynamodb.Table(TableName)
@@ -337,9 +339,8 @@ class BatchCloseRO(object):
             #Added 11/30/2022 for keep Processing History for each BatchClose RO Request    
             process_logs=self.GetBatchCloseROProcessLogs(store_code=store_code,fileId=fileId)
             comments="update request_status ="+str(req_status)
-            process_log={"log_time":str(res_ts), "request_status":str(req_status),"response_json":"","comments":comments}
+            process_log={"log_time":str(res_ts), "request_status":str(req_status),"comments":comments}
             process_logs.append(process_log)
-
             dynamodb = boto3.resource('dynamodb', region_name=BatchCloseRO.region)
             TableName=self.GetTableName(store_code)
             table = dynamodb.Table(TableName)
@@ -373,8 +374,11 @@ class BatchCloseRO(object):
 
             #Added 11/30/2022 for keep Processing History for each BatchClose RO Request    
             process_logs=self.GetBatchCloseROProcessLogs(store_code=store_code,fileId=file_id)
+            request_status=''
+            if len(process_logs)>0:
+                request_status=process_logs[len(process_logs)-1]["request_status"]
             comments="update retry_count ="+str(retry_count)+",ro_status="+str(ro_status)
-            process_log={"log_time":str(res_ts),"request_status":"","response_json":"","comments":comments}
+            process_log={"log_time":str(res_ts),"request_status":request_status,"comments":comments}
             process_logs.append(process_log)
 
             dynamodb = boto3.resource('dynamodb', region_name=BatchCloseRO.region)
@@ -408,9 +412,8 @@ class BatchCloseRO(object):
             #Added 11/30/2022 for keep Processing History for each BatchClose RO Request    
             process_logs=self.GetBatchCloseROProcessLogs(store_code=store_code,fileId=file_id)
             comments="update timeOut =True,retryCount="+str(retry_count)+",ro_status="+str(ro_status)
-            process_log={"log_time":str(res_ts), "request_status":str(req_sts),"response_json":response_json,"comments":comments}
+            process_log={"log_time":str(res_ts),"request_status":str(req_sts),"comments":comments}
             process_logs.append(process_log)
-
             dynamodb = boto3.resource('dynamodb', region_name=BatchCloseRO.region)
             TableName=self.GetTableName(store_code)
             table = dynamodb.Table(TableName)
@@ -468,7 +471,7 @@ class BatchCloseRO(object):
                 batchclosero_list=[]                
                 if len(paymentsList)==0 and autoCloseRO==True:
                     paymentsList=[]
-                    ro_resp=rOrder.GetROList(store_code,'RO',None,-1)                
+                    ro_resp=rOrder.GetROList(store_code,'RO',None,None,-1)                
                     batchclosero_list=[]
                     if ro_resp['status']==True:
                         roList=ro_resp['items']
@@ -496,7 +499,7 @@ class BatchCloseRO(object):
                                     }
                         paymentsList.append(b_json)
                 else:
-                    ro_resp=rOrder.GetROList(store_code,'RO',None,-1)                
+                    ro_resp=rOrder.GetROList(store_code,'RO',None,None,-1)                
                     batchclosero_list=[]
                     if ro_resp['status']==True:
                         roList=ro_resp['items']
@@ -948,7 +951,9 @@ class BatchCloseRO(object):
                                 if 'request_json' in item:
                                     item['request_json']=self.readLargeData(data=item['request_json'])
                                 if 'response_json' in item:
-                                    item['response_json']=self.readLargeData(data=item['response_json'])     
+                                    item['response_json']=self.readLargeData(data=item['response_json']) 
+                                if 'process_logs' in item:
+                                    item['process_logs']=self.readLargeData(data=item['process_logs'])     
                     return { "status":True,"items": items }
             except:
                     return { "status":True,"items": [] }   
@@ -1002,7 +1007,7 @@ class BatchCloseRO(object):
                 self.logger.debug("Total items :"+str(len(items))) 
                 self.logger.debug("Total parentPostList :"+str(len(parentPostList))) 
                 self.logger.debug("Total retryPostList :"+str(len(retryPostList)))        
-                roListResp=rOrder.GetROList(store_code,'RO',None,-1)
+                roListResp=rOrder.GetROList(store_code,'RO',None,None,-1)
                 if roListResp['status']==False:  
                     ro_list_items=[]
                 else:     
@@ -1240,7 +1245,7 @@ class BatchCloseRO(object):
                 self.logger.debug("Total parentPostList :"+str(len(parentPostList))) 
                 self.logger.debug("Total retryPostList :"+str(len(retryPostList)))         
 
-                roListResp=rOrder.GetROList(store_code,'RO',None,-1)
+                roListResp=rOrder.GetROList(store_code,'RO',None,None,-1)
                 if roListResp['status']==False:  
                     self.logger.debug("GetROList  status false:")  
                     ro_list_items=[]

@@ -75,6 +75,10 @@ class RODBHelper():
                 #    logger.info("BLANK_STATUS_RO:"+str(row["REFER"] )+",store_code:"+str(store_code)+",client_id="+str(client_id))
                 # if len(row["TOTAL$"])==0:
                 #    logger.info("BLANK_AMOUNT_RO:"+str(row["REFER"] )+",store_code:"+str(store_code)+",client_id="+str(client_id))
+                totalEstimate=""
+                if "EPDE.TOTAL.ESTIMATE" in row and row["EPDE.TOTAL.ESTIMATE"] is not None:
+                    totalEstimate=str(row["EPDE.TOTAL.ESTIMATE"])
+
                 item={
                             "client_id": str(client_id),
                             "store_code": str(store_code),
@@ -84,7 +88,7 @@ class RODBHelper():
                             "open_date_time": open_date_time,
                             "close_date_time":close_date_time,
                             "amount_due": str(row["TOTAL$"]),
-                            "total_estimate":str(row["EPDE.TOTAL.ESTIMATE"]),
+                            "total_estimate":totalEstimate,
                             "comments": dbhelper.RemoveNewLineCarrigeReturn(row["COMMENTS"]),
                             "vehicle_vin":dbhelper.CovertToString( row["SERIAL NO"]),
                             "vehicle_make": dbhelper.CovertToString(row["MAKE"]),
@@ -256,6 +260,7 @@ class RODBHelper():
     @classmethod
     def GetROStatusMapping(self,store_code):
         filters=[]
+        source=""
         app_client=AppClient()
         region=os.environ['REGION']  
         store_resp=app_client.GetStoreDetail(store_code,region=region)
@@ -263,7 +268,9 @@ class RODBHelper():
             item=store_resp['item']
             if 'ro_status_mapping' in item:
                 filters=item['ro_status_mapping']
-        return filters
+            if 'source' in item:
+                source=item['source']    
+        return {'statusMap':filters,'source':source}
     @classmethod
     def Save_TKRO(self,store_code,json_ro,client_id):
         logger.info("Inside Save_TKRO RODBHelper Method....store_code:"+store_code+",client_id="+client_id)
@@ -278,7 +285,8 @@ class RODBHelper():
             create_date = ct.strftime("%Y-%m-%d %I:%M:%S %p")
             create_date_only = ct.strftime("%Y-%m-%d")
             recount=0
-            statusMap=self.GetROStatusMapping(store_code)
+            resp_mapping=self.GetROStatusMapping(store_code)
+            statusMap=resp_mapping['statusMap']
             logger.debug("TEKION json_ro="+str(json_ro))
             for row in json_ro['data']:
                 recount=recount+1
@@ -485,8 +493,10 @@ class RODBHelper():
             ct = datetime.now()
             create_date = ct.strftime("%Y-%m-%d %I:%M:%S %p")
             create_date_only = ct.strftime("%Y-%m-%d")
-            recount=0
-            statusMap=self.GetROStatusMapping(store_code)
+            recount=0            
+            resp_mapping=self.GetROStatusMapping(store_code)
+            statusMap=resp_mapping['statusMap']
+            source=resp_mapping['source']
             logger.debug("MR json_ro="+str(json_ro))
             for row in json_ro:
                 recount=recount+1
@@ -578,7 +588,7 @@ class RODBHelper():
                 if 'repairOrderParties' in row and len(row["repairOrderParties"])>0:
                     for repairOrderParty in row['repairOrderParties']:                        
                         if 'partyType' in repairOrderParty and  repairOrderParty['partyType'] == 'OwnerParty': 
-                            customerParty=self.ExtractPartyDetail(repairOrderParty)   
+                            customerParty=self.ExtractPartyDetail(repairOrderParty,source)   
             
                         if 'partyType' in repairOrderParty and repairOrderParty['partyType'] == 'ServiceAdvisorParty':
                             if 'personName' in repairOrderParty:                        
@@ -733,14 +743,21 @@ class RODBHelper():
 
                 warranty_due=""
                 amount_due=""
-                if 'price' in row:
+                if 'price' in row and row['price'] is not None and  len(row['price'])>0:
+                    amount_due_decimal=0.0
+                    warranty_due_decimal=0.0
                     for price in row['price']:
                         if "priceCode" in price:
                             priceCode=price["priceCode"]
-                            if priceCode=="CustomerPayTotalSale" and "chargeAmount" in price :                            
-                                    amount_due=str(price["chargeAmount"])
+                            if priceCode=="CustomerPayTotalSale" and "chargeAmount" in price :                                                           
+                                    amount_due_decimal=amount_due_decimal+price["chargeAmount"]
+                                    amount_due=str(str(round(amount_due_decimal, 2)))
                             if priceCode=="WarrantyTotalSale" and "chargeAmount" in price :                            
-                                    warranty_due=str(price["chargeAmount"])
+                                    warranty_due_decimal=warranty_due_decimal+price["chargeAmount"]
+                                    warranty_due=str(round(warranty_due_decimal, 2))
+               
+        
+
                 total_estimate=""
 
                 item={
@@ -1013,7 +1030,12 @@ class RODBHelper():
                 }
 
     @classmethod
-    def ExtractPartyDetail(self,roParty):
+    def ExtractPartyDetail(self,roParty,source):
+
+        idType='Other'
+        #if source=='automate':
+              #idType='Other'
+
         primaryContact=None
         customerId=None
         partyDetail=self.ExtractCustomerDetail(roParty)
@@ -1024,7 +1046,7 @@ class RODBHelper():
         if 'idList' in roParty and len(roParty["idList"])>0:  
             idList=roParty['idList']                                  
             for id in idList:
-                if 'typeId' in id and 'id' in id and id['typeId'] == 'DMSId': 
+                if 'typeId' in id and 'id' in id and id['typeId'] == idType: 
                     customerId= id["id"]                                    
                     break
         address_groups=self.ExtractAddressGroups(roParty)               

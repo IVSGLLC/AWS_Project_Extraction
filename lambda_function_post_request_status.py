@@ -68,6 +68,7 @@ def lambda_handler(event, context):
                         "request_status":str(item['request_status']),
                         "request_json": str(item['request_json']),
                         "response_json":str( item['response_json']),
+                        "process_logs":str( item['process_logs']),
                         "response_time":str(item['res_time']),
                         "document_id":str(item['document_id']),
                         "ro_status":str(item['ro_status'])
@@ -84,6 +85,7 @@ def lambda_handler(event, context):
                         "request_json": str(item['request_json']),
                         "response_json":str( item['response_json']),
                         "response_time":str(item['res_time']),
+                         "process_logs":str( item['process_logs']),
                         "depositReferenceNumber":str(item['deposit_ref_number'])
                         } 
                 elif request_type == "BATCHCLOSERO" : 
@@ -96,6 +98,7 @@ def lambda_handler(event, context):
                         "request_status":str(item['request_status']),
                         "request_json": str(item['request_json']),
                         "response_json":str( item['response_json']),
+                         "process_logs":str( item['process_logs']),
                         "response_time":str(item['res_time'])                        
                         }       
                 elif request_type == "ACCOUNTING" : 
@@ -108,6 +111,7 @@ def lambda_handler(event, context):
                         "request_status":str(item['request_status']),
                         "request_json": str(item['request_json']),
                         "response_json":str( item['response_json']),
+                         "process_logs":str( item['process_logs']),
                         "response_time":str(item['res_time']),
                         "accountingReferenceNumber":str(item['accounting_ref_number'])
                         }        
