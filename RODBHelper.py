@@ -539,10 +539,10 @@ class RODBHelper():
                 if "vehicleHatNumber" in row:
                     vehicleHatNumber=row["vehicleHatNumber"]
 
-                make=""
-                model=""
-                year=""
-                vin=""
+                make="NotProvided"
+                model="NotProvided"
+                year="NotProvided"
+                vin="NotProvided"
                 if "repairOrderVehicleLineItem" in row:
                     repairOrderVehicleLineItem=row["repairOrderVehicleLineItem"]
                     if "vehicle" in repairOrderVehicleLineItem:
@@ -1031,10 +1031,9 @@ class RODBHelper():
 
     @classmethod
     def ExtractPartyDetail(self,roParty,source):
-
         idType='Other'
-        #if source=='automate':
-              #idType='Other'
+        if source=='autosoft':
+           idType='DMSId'
 
         primaryContact=None
         customerId=None

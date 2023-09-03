@@ -244,7 +244,7 @@ class SalesCustDBHelper():
                             ""               
                
                
-
+                #serviceCustomerId=""
                 buyer_number="null"  
                 buyer_name="" 
                 buyer_f_name="" 
@@ -260,6 +260,8 @@ class SalesCustDBHelper():
                 if customerParty is not None:
                     if 'partyId' in customerParty and customerParty['partyId'] is not None:
                         buyer_number=customerParty['partyId']
+                    """ if 'serviceCustomerId' in customerParty and customerParty['serviceCustomerId'] is not None:
+                        serviceCustomerId=customerParty['serviceCustomerId'] """
 
                     if 'partyDetail' in customerParty and customerParty['partyDetail'] is not None:
                         partyDetail=customerParty['partyDetail']
@@ -457,27 +459,32 @@ class SalesCustDBHelper():
     @classmethod
     def ExtractPartyDetail(self,partsInvoiceParty,source):
         idType='Other'
-        #if source=='automate':
-              #idType='Other'
+        if source=='autosoft':
+           idType='DMSId'
 
         primaryContact=None
         customerId=None
+        #serviceCustomerId=None
         partyDetail=self.ExtractCustomerDetail(partsInvoiceParty)
         #primaryContact
         if 'primaryContact' in partsInvoiceParty and  partsInvoiceParty['primaryContact'] is not None:
             primaryContact= self.ExtractCustomerDetail(partsInvoiceParty['primaryContact']  )
         #Id
+        
         if 'idList' in partsInvoiceParty and len(partsInvoiceParty["idList"])>0:  
             idList=partsInvoiceParty['idList']                                  
             for id in idList:
                 if 'typeId' in id and 'id' in id and id['typeId'] == idType: 
-                    customerId= id["id"]                                    
-                    break
+                    customerId= id["id"]
+                    break                                    
+                #if source=="autosoft" and  'typeId' in id and 'id' in id and id['typeId'] == "Other": 
+                #   serviceCustomerId= id["id"]           
               
         return  {                 
                 "partyId":str(customerId), 
                 "partyDetail": partyDetail,                 
                 "primaryContact":primaryContact ,
+                #"serviceCustomerId":serviceCustomerId
                
             }
                 

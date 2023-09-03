@@ -1035,21 +1035,27 @@ class PartsDBHelper():
                             if addressGroups is not None and 'Shipping' in addressGroups :
                                 shipAddress=addressGroups['Shipping']
 
-                 
+                isShipAddressFound=False 
+                isSoldAddressFound=False 
                 if resdenceAddress is not None:
                     soldToAddress=self.prePareAddress(firstName=firstName,customerId=customerId,lastName=lastName,address=resdenceAddress)
                     shipToAddress=soldToAddress
+                    isShipAddressFound=True
+                    isSoldAddressFound=True
                 if mailAddress is not None:
                     soldToAddress=self.prePareAddress(firstName=firstName,customerId=customerId,lastName=lastName,address=mailAddress)
                     shipToAddress=soldToAddress
+                    isShipAddressFound=True
+                    isSoldAddressFound=True
                 if billAddress is not None:
                    soldToAddress=self.prePareAddress(firstName=firstName,customerId=customerId,lastName=lastName,address=billAddress)
-                   if shipToAddress is None:
+                   isSoldAddressFound=True
+                   if isShipAddressFound == False:
                       shipToAddress=soldToAddress 
                 if shipAddress is not None:
-                    shipAddress=self.prePareAddress(firstName=firstName,customerId=customerId,lastName=lastName,address=shipAddress) 
-                    if soldToAddress is None:
-                       soldToAddress=shipAddress
+                    shipToAddress=self.prePareAddress(firstName=firstName,customerId=customerId,lastName=lastName,address=shipAddress) 
+                    if isSoldAddressFound == False:
+                       soldToAddress=shipToAddress
 
                 parts=[] 
                 totalParts=""
@@ -1435,8 +1441,8 @@ class PartsDBHelper():
     @classmethod
     def ExtractPartyDetail(self,partsInvoiceParty,source):
         idType='Other'
-        #if source=='automate':
-              #idType='Other'
+        if source=='autosoft':
+           idType='DMSId'
         primaryContact=None
         customerId=None
         partyDetail=self.ExtractCustomerDetail(partsInvoiceParty)
