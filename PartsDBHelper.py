@@ -1131,26 +1131,45 @@ class PartsDBHelper():
                 dealerDiscountAmount=""
                 totalPrice=""
                 totalCost=""
+                shippingCost=""
                 if "pricing" in row and row["pricing"] is not None and len(row["pricing"])>0:
                     totalCostAmt=0.0
                     totalPriceAmt=0.0
                     freightTotalAmt=0.0
                     dealerDiscountAmountAmt=0.0
+                    shippingCostAmt=0.0
                     for pricing in row["pricing"]:
                         if "priceCode" in pricing and "chargeAmount" in pricing:
-                            if pricing["priceCode"]=="TotalCost":
-                                totalCostAmt=totalCostAmt+pricing['chargeAmount'] 
-                                totalCost=str(round(totalCostAmt, 2))
-                            if pricing["priceCode"]=="TotalPrice":
-                                totalPriceAmt=totalPriceAmt+pricing['chargeAmount']   
-                                totalPrice=str(round(totalPriceAmt, 2))
-                            if pricing["priceCode"]=="Fright":
-                                freightTotalAmt=freightTotalAmt+pricing['chargeAmount'] 
-                                freightTotal=str(round(freightTotalAmt, 2))                                 
-                            if pricing["priceCode"]=="DealerDiscountAmount":
-                                dealerDiscountAmountAmt=dealerDiscountAmountAmt+pricing['chargeAmount']
-                                dealerDiscountAmount=str(round(dealerDiscountAmountAmt, 2))   
-
+                            if source=="autosoft":
+                                if pricing["priceCode"]=="TotalCost":
+                                    totalCostAmt=totalCostAmt+pricing['chargeAmount'] 
+                                    totalCost=str(round(totalCostAmt, 2))
+                                if pricing["priceCode"]=="TotalPartsAmount":
+                                    totalPriceAmt=totalPriceAmt+pricing['chargeAmount']   
+                                    totalPrice=str(round(totalPriceAmt, 2))
+                                if pricing["priceCode"]=="Fright":
+                                    freightTotalAmt=freightTotalAmt+pricing['chargeAmount'] 
+                                    freightTotal=str(round(freightTotalAmt, 2))                                 
+                                if pricing["priceCode"]=="DealerDiscountAmount":
+                                    dealerDiscountAmountAmt=dealerDiscountAmountAmt+pricing['chargeAmount']
+                                    dealerDiscountAmount=str(round(dealerDiscountAmountAmt, 2))  
+                                """ if pricing["priceCode"]=="ShippingCost":
+                                    shippingCostAmt=shippingCostAmt+pricing['chargeAmount']
+                                    shippingCost=str(round(shippingCostAmt, 2))     """
+                                
+                            else:
+                                if pricing["priceCode"]=="TotalCost":
+                                    totalCostAmt=totalCostAmt+pricing['chargeAmount'] 
+                                    totalCost=str(round(totalCostAmt, 2))
+                                if pricing["priceCode"]=="TotalPrice":
+                                    totalPriceAmt=totalPriceAmt+pricing['chargeAmount']   
+                                    totalPrice=str(round(totalPriceAmt, 2))
+                                if pricing["priceCode"]=="Fright":
+                                    freightTotalAmt=freightTotalAmt+pricing['chargeAmount'] 
+                                    freightTotal=str(round(freightTotalAmt, 2))                                 
+                                if pricing["priceCode"]=="DealerDiscountAmount":
+                                    dealerDiscountAmountAmt=dealerDiscountAmountAmt+pricing['chargeAmount']
+                                    dealerDiscountAmount=str(round(dealerDiscountAmountAmt, 2))   
               
                 contactPhone=homePhone
                 if contactPhone == None or contactPhone =="":

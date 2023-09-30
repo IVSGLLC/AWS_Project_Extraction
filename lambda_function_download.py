@@ -34,9 +34,9 @@ def lambda_handler(event, context):
     try:      
             eastern=pytz.timezone('US/Eastern')   
             downloadStart = datetime.now().astimezone(eastern)        
-            _moduleNM="EPDE_Lambda"
-            _functionNM="lambda_handler"
-            err_handler.appInfo(moduleNM=_moduleNM,functionNM=_functionNM)  
+            #_moduleNM="EPDE_Lambda"
+            #_functionNM="lambda_handler"
+            #err_handler.appInfo(moduleNM=_moduleNM,functionNM=_functionNM)  
             try:
                 if 'queryStringParameters' in event:
                     queryStringParameters=event['queryStringParameters']
@@ -230,9 +230,7 @@ def lambda_handler(event, context):
                     else:
                         if status!='ERROR':
                             msg="0 message download"
-                        res_json=""
-
-                    
+                        res_json=""                    
             else:
                  logger.debug("API Key not found...")  
                  status='ERROR'
@@ -245,28 +243,52 @@ def lambda_handler(event, context):
             logger.error("error occured in lambda_handler",True)
             msg=str(ex_value)
             res_json= resHandler.GetErrorResponseJSON(313,None)
-    aws_account_id = context.invoked_function_arn.split(":")[4]   
-    #logger.debug("event="+str(event))   
-    time_difference=datetime.now().astimezone(eastern)-downloadStart
-    time_difference_in_milliseconds = int(time_difference.total_seconds() * 1000)   
-    logEvent={
-        
-                "instance" :str(aws_account_id),
-                "sourceIP":event["requestContext"]["identity"]["sourceIp"],
-                "reqApi" :reqAPI,
-                "reqDealerCode":dealerCode,
-                "reqDealerGroup":dealerGroup,
-                "reqQueue": queue,
-                "queueName": queueNm,
-                "stage":event['requestContext']['stage'],
-                "totalMessageCount": totalMessageCount,
-                "status": status,
-                "receiveMessageDateTime":downloadStart.strftime("%Y-%m-%dT%H:%M:%S%z") ,
-                "receiveMessageDurationMS": time_difference_in_milliseconds,
-                "downloadedMessageCount":len(allowMsgList),
-                "message": msg,
-                "logMsgList":logMsgList
-            }     
-    cwLogger.DoCloudWatchLog('epde/downloadLog',logEvent)       
+    try:        
+               aws_account_id = context.invoked_function_arn.split(":")[4] 
+               time_difference=datetime.now().astimezone(eastern)-downloadStart
+               time_difference_in_milliseconds = int(time_difference.total_seconds() * 1000) 
+               responseCode=0
+               errorMessage=msg
+               errorCode=0              
+               if status=="ERROR":
+                    responseCode= res_json["responseCode"]
+                    errorList= res_json["errorList"]               
+                    errorMessage=errorList["code"]
+                    errorCode=errorList["message"]
+
+               param_json={
+                    "queryStringParameters":event['queryStringParameters'],
+                    "pathParameters":event['pathParameters'],
+                    "Authorization":Authorization
+               }               
+               apiParameters=resHandler.ConvertJsonToString(resjson=param_json)
+               logEvent={
+                    "instance" :str(aws_account_id),
+                    "app":"EPDE-API-GATEWAY",
+                    "sourceIP":event["requestContext"]["identity"]["sourceIp"],
+                    "apiId":event['requestContext']['apiId'],   
+                    "stage":event['requestContext']['stage'],            
+                    "resourcePath" :event['requestContext']['resourcePath'],
+                    "apiName" :"DownloadQueueRequest",
+                    "httpMethod" :event['requestContext']['httpMethod'],
+                    "apiParameters" :apiParameters,
+                    "storeCode":None,          
+                    "status":  status,
+                    "requestTime":downloadStart.strftime("%Y-%m-%dT%H:%M:%S%z"),  
+                    "totalProcessingTimeMS": time_difference_in_milliseconds,                
+                    "message": errorMessage,
+                    "code": errorCode,
+                    "responseCode":responseCode,                   
+                    "responseSize": len(res_json.encode('utf-8')) ,
+                    "apiType" :"public",
+                    "totalRecordsInQueue": totalMessageCount,                   
+                    "queueName":queueNm,
+                    "totalDownloadedRecords":len(allowMsgList) ,
+                    "messageList": logMsgList
+               } 
+               cwLogger= CloudWatchLogger()    
+               cwLogger.DoCloudWatchLog('epde/apiLog',logEvent)
+    except:
+               logger.error("error occured DoCloudWatchLog in lambda_handler",True)      
     return resHandler.GetAPIResponse(res_json)
         

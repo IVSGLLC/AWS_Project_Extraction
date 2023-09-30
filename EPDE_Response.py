@@ -21,6 +21,10 @@ class ResponseHandler(object):
     err_handler=ErrorHandler()
     
     @classmethod
+    def ConvertJsonToString(self,resjson):
+        return json.dumps(resjson, default=defaultencode, separators=(',', ':')) 
+    
+    @classmethod
     def GetAPIResponse(self,resjson):
         _moduleNM="ResponseHandler"
         _functionNM="GetAPIResponse"

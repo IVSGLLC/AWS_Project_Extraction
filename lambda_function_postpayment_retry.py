@@ -3,6 +3,8 @@ import datetime
 from decimal import Decimal
 import json
 import boto3
+import pytz
+from EPDE_CloudWatchLog import CloudWatchLogger
 from EPDE_Error import ErrorHandler
 from EPDE_Logging import LogManger
 from EPDE_RO import RepairOrder
@@ -25,6 +27,22 @@ def defaultencode(o):
 def lambda_handler(event, context):
     res_json=""
     resHandler=ResponseHandler()
+    message="NOT_POSTED"
+    eastern=pytz.timezone('US/Eastern')  
+    requestStart = datetime.now().astimezone(eastern)
+    res_json=""
+    store_code=""
+    status="ERROR"    
+    queueNM=""
+    payment_request=None
+    validateResp=None
+    tableperstore=1
+    tableperstore_post=1
+    fileId=None
+    document_id=None
+    parent_file_id=""
+    latest_ro_status=""
+    total_amount_due=""
     try:
         logger.debug("PostPaymentRetry>> event="+str(event))
         close_all_RO_flag=event['close_all_RO_flag']
@@ -35,8 +53,7 @@ def lambda_handler(event, context):
         store_code=event['store_code']     
         document_id= event['document_id'] 
         region=event['region']
-        tableperstore=1
-        tableperstore_post=1
+        step_arn=None
         queueNm=event['request_queue_name']
         stage='prod'
         if 'stage' in event:
@@ -64,6 +81,8 @@ def lambda_handler(event, context):
                 postpayentry=post_manager.GetPostPaymentEntry(store_code,fileId)
                 if postpayentry['status']:
                     paymentEntry=postpayentry['item']
+                    if 'total_amount_due' in paymentEntry:
+                        total_amount_due=paymentEntry['total_amount_due']
                     #if paymentEntry['request_status'] =='REQUEST_DOWNLOADED' or paymentEntry['request_status'] =='RESPONSE_UPLOADED' :
                     if True:
                         request_status=paymentEntry['request_status']
@@ -100,7 +119,7 @@ def lambda_handler(event, context):
                         retry_paymentEntry['res_time']=str(req_ts)
                         retry_paymentEntry['parent_file_id']=fileId
                         retry_paymentEntry['file_id']=None
-                       
+                        parent_file_id=fileId
                         
                         try:                       
                             retry_paymentEntry['is_spc_ins']="N"
@@ -113,10 +132,12 @@ def lambda_handler(event, context):
                         if save_resp['status']== True: 
                                 file_id=save_resp['file_id']       
                                 sqs= SQSManager(queueNm,region,msg_count,wait_time)   
-                                logger.debug("SQS msg_body :"+str(save_resp['payment_request']))               
+                                payment_request=save_resp['payment_request']
+                                logger.debug("SQS msg_body :"+str(save_resp['payment_request']))  
+
                                 sqs_resp=sqs.send_message(msg_body=save_resp['payment_request'],MessageGroupId=store_code,MessageDeduplicationId=file_id)
                                 if sqs_resp['status'] == True:
-                                    
+                                    status="SUCCESS"
                                     if isRetryActive and (paymentEntry['retry_count']< MaxRetryCount):
                                         # call step function
                                         input={"request_queue_ms_wait_time_in_second":wait_time,"request_queue_max_msg_count":msg_count,"request_queue_name":queueNm,"close_all_RO_flag":close_all_RO_flag,"MaxRetryCount":MaxRetryCount,"isRetryActive":True,"fileId":fileId,"store_code": store_code,"document_id":document_id,"retry_wait_time_in_min":(retry_wait_time_in_min),"table_per_store_post_payment":tableperstore_post,"table_per_store_ro_detail":tableperstore,"region":region,"stage":stage}           
@@ -182,7 +203,47 @@ def lambda_handler(event, context):
             #save not posted request 
             logger.error("error occured in retry_lambda_handler",True)
             res_json= resHandler.GetErrorResponseJSON(313,None)
-    
+    finally: 
+          try:        
+               aws_account_id = context.invoked_function_arn.split(":")[4] 
+               time_difference=datetime.now().astimezone(eastern)-requestStart
+               time_difference_in_milliseconds = int(time_difference.total_seconds() * 1000) 
+               responseCode= 0
+               errorMessage=message
+               errorCode=0
+               apiParameters=None
+               if status=="ERROR":
+                    responseCode= res_json["responseCode"]
+                    errorList= res_json["errorList"]               
+                    errorMessage=errorList["code"]
+                    errorCode=errorList["message"]
+               #apiParameters={"payment_request":payment_request,"payment_response":validateResp,"queueName":queueNM, "fileId":file_id,"parent_file_id":parent_file_id}                          
+               apiParameters={"ro_number":document_id,"ro_status":latest_ro_status,"parent_file_id":parent_file_id,"queueName":queueNM,"total_amount_due":total_amount_due, "fileId":file_id}   
+               #apiParameters=resHandler.ConvertJsonToString(resjson=param_json)
+               resourcePath="PostPayment_Retry_StateMachine"
+               if stage == 'test':
+                 resourcePath="TEST_PostPayment_Retry_StateMachine"  
+               logEvent={
+                    "instance" :str(aws_account_id),
+                    "app":"EPDE-STATE-MACHINE",
+                    "resourcePath":resourcePath,   
+                    "stage":stage,            
+                    "apiName" :"PostPayment_Retry",                          
+                    "storeCode":store_code,          
+                    "status": status,
+                    "requestTime":requestStart.strftime("%Y-%m-%dT%H:%M:%S%z"),  
+                    "totalProcessingTimeMS": time_difference_in_milliseconds,                
+                    "message": errorMessage,
+                    "code": errorCode,
+                    "responseCode":responseCode,                    
+                    "responseSize": len(res_json.encode('utf-8')) ,
+                    "apiType" :"Internal",                     
+                    "extraInfo" :apiParameters           
+               } 
+               cwLogger= CloudWatchLogger()    
+               cwLogger.DoCloudWatchLog('epde/stateMachineLog',logEvent)
+          except:
+               logger.error("error occured DoCloudWatchLog in lambda_handler",True)
     return resHandler.GetAPIResponse(res_json)        
 
 

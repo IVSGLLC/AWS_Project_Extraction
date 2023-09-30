@@ -28,10 +28,11 @@ def lambda_handler(event, context):
     log_status="ERROR"
     log_dealerCode=""
     log_msg=""
-    uploadStart=''
+    requestStart=''
+    Authorization=""
     try:
             eastern=pytz.timezone('US/Eastern')  
-            uploadStart = datetime.now().astimezone(eastern)
+            requestStart = datetime.now().astimezone(eastern)
             app_client=AppClient()
             config=app_client.GetConfiguration(event)            
             region=config['REGION']
@@ -122,8 +123,6 @@ def lambda_handler(event, context):
                         ""
                    logger.debug("postresponse ="+str(postResponse))         
                    #sqs_resp= sqs.send_message(postResponse,store_code,fileId) will send response to sqs not in use
-                                  
-                   
                    #api=postResponse['api']
                    client_id=None
                    if api == 'postpaymentsResponse':
@@ -150,8 +149,7 @@ def lambda_handler(event, context):
                    elif api == 'postaccountingResponse':                         
                         res_json=postaccounting_manager.UpdatePostAccounting(store_code,fileId,"RESPONSE_UPLOADED",postResponse)
                         log_status="SUCCESS"
-                        log_fileId=fileId
-                        log_dealerCode=store_code
+                        log_fileId=fileId                       
                         log_msg="RESPONSE_UPLOADED"
                         if postResponse is not None and  'api' in postResponse:
                            log_api=postResponse['api']  
@@ -173,22 +171,52 @@ def lambda_handler(event, context):
             logger.error("error occured in lambda_handler",True)
             log_msg=str(ex_value)
             res_json= resHandler.GetErrorResponseJSON(313,None)
-    aws_account_id = context.invoked_function_arn.split(":")[4]  
-    time_difference=datetime.now().astimezone(eastern)-uploadStart
-    time_difference_in_milliseconds = int(time_difference.total_seconds() * 1000) 
-    logEvent={
-        
-                "instance" :str(aws_account_id),
-                "sourceIP":event["requestContext"]["identity"]["sourceIp"],
-                "api" :log_api,
-                "dealerCode":log_dealerCode,
-                "fileId":log_fileId,
-                "stage":event['requestContext']['stage'],
-                "status": log_status,
-                "uploadMessageDateTime":uploadStart.strftime("%Y-%m-%dT%H:%M:%S%z") ,
-                "uploadMessageDurationMS": time_difference_in_milliseconds,                
-                "message": log_msg,
-               
-            }     
-    cwLogger.DoCloudWatchLog('epde/uploadLog',logEvent)
+    try:        
+               aws_account_id = context.invoked_function_arn.split(":")[4] 
+               time_difference=datetime.now().astimezone(eastern)-requestStart
+               time_difference_in_milliseconds = int(time_difference.total_seconds() * 1000) 
+
+               responseCode=0
+               errorMessage=log_msg
+               errorCode=0
+               status=log_status
+               if status=="ERROR":
+                    responseCode= res_json["responseCode"]
+                    errorList= res_json["errorList"]               
+                    errorMessage=errorList["code"]
+                    errorCode=errorList["message"]
+
+               param_json={
+                    "queryStringParameters":event['queryStringParameters'],
+                    "pathParameters":event['pathParameters'],
+                    "Authorization":Authorization
+               }               
+               apiParameters=resHandler.ConvertJsonToString(resjson=param_json)
+               logEvent={
+                    "instance" :str(aws_account_id),
+                    "app":"EPDE-API-GATEWAY",
+                    "sourceIP":event["requestContext"]["identity"]["sourceIp"],
+                    "apiId":event['requestContext']['apiId'],   
+                    "stage":event['requestContext']['stage'],            
+                    "resourcePath" :event['requestContext']['resourcePath'],
+                    "apiName" :"UploadResponse",
+                    "httpMethod" :event['requestContext']['httpMethod'],
+                    "apiParameters" :apiParameters,
+                    "storeCode":store_code,          
+                    "status":  status,
+                    "requestTime":requestStart.strftime("%Y-%m-%dT%H:%M:%S%z"),  
+                    "totalProcessingTimeMS": time_difference_in_milliseconds,                
+                    "message": errorMessage,
+                    "code": errorCode,
+                    "responseCode":responseCode,
+                    "totalUploadRecords": 1,
+                    "responseSize": len(res_json.encode('utf-8')) ,
+                    "apiType" :"public",
+                    "fileId":log_fileId, 
+                    "uploadAPI":log_api 
+               } 
+               cwLogger= CloudWatchLogger()    
+               cwLogger.DoCloudWatchLog('epde/apiLog',logEvent)
+    except:
+               logger.error("error occured DoCloudWatchLog in lambda_handler",True)
     return resHandler.GetAPIResponse(res_json)

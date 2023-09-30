@@ -1,3 +1,5 @@
+import pytz
+from EPDE_CloudWatchLog import CloudWatchLogger
 from EPDE_Error import ErrorHandler
 from EPDE_Logging import LogManger
 from EPDE_Response import ResponseHandler
@@ -8,13 +10,15 @@ import base64 as b64
 logger=LogManger()
 err_handler=ErrorHandler()
 def lambda_handler(event, context):
-    #logger.debug("event="+str(event))    
+    status="ERROR" 
     res_json=""
+    api_key=None
     resHandler=ResponseHandler()
-    try:
-            _moduleNM="EPDE_Lambda"
-            _functionNM="lambda_handler"
-            err_handler.appInfo(moduleNM=_moduleNM,functionNM=_functionNM) 
+    eastern=pytz.timezone('US/Eastern')  
+    requestStart = datetime.now().astimezone(eastern)
+    store_code=None
+    body=None
+    try:           
             grant_type=True
             isPasswordClient=False
             stage=event['requestContext']['stage']
@@ -66,14 +70,26 @@ def lambda_handler(event, context):
             if access_token is None:
                 logger.debug("API Key not found...")                  
                 res_json= resHandler.GetErrorResponseJSON(331,None)
+                return resHandler.GetAPIResponse(res_json)
+          
             app_client= AppClient()
             config=app_client.GetConfiguration(event)
             region=config['REGION']
             store_detail_resp=None
+            api_key=access_token
             if isPasswordClient:
-                store_detail_resp=app_client.GetStoreDetailByAPIKey(access_token,region) 
+                store_detail_resp=app_client.GetStoreDetailByAPIKey(access_token,region)
+                if store_detail_resp['status']== True and "item" in store_detail_resp:
+                    if "store" in store_detail_resp["item"]:          
+                        store_code= store_detail_resp["item"]["store"]
             else:
                 store_detail_resp=app_client.GetStoreDetailByClientId(access_token,region) 
+                if store_detail_resp['status']== True and "item" in store_detail_resp:
+                    if "store_code" in store_detail_resp["item"]:  
+                        store_code= store_detail_resp["item"]["store_code"]
+                    #if "stores" in store_detail_resp["item"]:  
+                        #store_code= store_detail_resp["item"]["stores"]     
+                
 
             if store_detail_resp['status']== False:
                         logger.debug("Store detail not found...")                
@@ -117,6 +133,7 @@ def lambda_handler(event, context):
             api_responseJson=api_response.json()  
             logger.debug("Cognito api_response.status_code:"+str(api_response.status_code))                      
             if api_response.status_code ==200:
+                status="SUCCESS"
                 token_type=api_responseJson['token_type']
                 access_token=api_responseJson['access_token']
                 expires_in=api_responseJson['expires_in']
@@ -140,3 +157,51 @@ def lambda_handler(event, context):
             logger.error("error occured in lambda_handler",True)
             res_json= resHandler.GetErrorResponseJSON(313,None)
             return resHandler.GetAPIResponse(res_json) 
+    finally: 
+          try:        
+               aws_account_id = context.invoked_function_arn.split(":")[4] 
+               time_difference=datetime.now().astimezone(eastern)-requestStart
+               time_difference_in_milliseconds = int(time_difference.total_seconds() * 1000) 
+               responseCode= 0
+               errorMessage=""
+               errorCode=0
+               if status=="ERROR":
+                    responseCode= res_json["responseCode"]
+                    errorList= res_json["errorList"]               
+                    errorMessage=errorList["code"]
+                    errorCode=errorList["message"]
+
+               param_json={
+                    "queryStringParameters":event['queryStringParameters'],
+                    "pathParameters":event['pathParameters'],
+                    "body":event['body'],                    
+                    "Authorization":event['headers']['Authorization']                                 
+               }               
+               apiParameters=resHandler.ConvertJsonToString(resjson=param_json)
+               logEvent={
+                    "instance" :str(aws_account_id),
+                    "app":"EPDE-API-GATEWAY",
+                    "sourceIP":event["requestContext"]["identity"]["sourceIp"],
+                    "apiId":event['requestContext']['apiId'],   
+                    "stage":event['requestContext']['stage'],            
+                    "resourcePath" :event['requestContext']['resourcePath'],
+                    "apiName" :"GenerateToken",
+                    "httpMethod" :event['requestContext']['httpMethod'],
+                    "apiParameters" :apiParameters,
+                    "storeCode":store_code,          
+                    "status": status,
+                    "requestTime":requestStart.strftime("%Y-%m-%dT%H:%M:%S%z"),  
+                    "totalProcessingTimeMS": time_difference_in_milliseconds,                
+                    "message": errorMessage,
+                    "code": errorCode,
+                    "responseCode":responseCode,                    
+                    "responseSize": len(res_json.encode('utf-8')) ,
+                    "apiType" :"public" ,
+                    "apiKey" :api_key 
+                                 
+               } 
+               cwLogger= CloudWatchLogger()    
+               cwLogger.DoCloudWatchLog('epde/apiLog',logEvent)
+          except:
+               logger.error("error occured DoCloudWatchLog in lambda_handler",True)
+ 
