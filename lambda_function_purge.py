@@ -1,5 +1,9 @@
+import datetime
 import json
 import time
+
+import pytz
+from EPDE_CloudWatchLog import CloudWatchLogger
 from EPDE_Error import ErrorHandler
 from EPDE_Logging import LogManger
 from EPDE_Response import ResponseHandler
@@ -15,11 +19,12 @@ def chunks(lst, n):
 def lambda_handler(event, context):
     res_json=""
     resHandler=ResponseHandler()
-
+    status="ERROR"  
+    eastern=pytz.timezone('US/Eastern')  
+    requestStart = datetime.now().astimezone(eastern)
+    summary_list=[]
     try:
-        _moduleNM="EPDE_Lambda"
-        _functionNM="lambda_handler"
-        err_handler.appInfo(moduleNM=_moduleNM,functionNM=_functionNM)             
+        purgeDetail=[]  
         app_client= AppClient()
         request_queue=event['REQUEST_QUEUE_NAME']
         region=event['REGION']
@@ -38,14 +43,18 @@ def lambda_handler(event, context):
                                 batches = chunks(stores,5)                
                                 for batch in batches: 
                                     delete_batch(client_1,batch,event) 
-                                    logger.info("prod store submitted for purge  in Batch:")   
-                                    time.sleep(5)                     
+                                    logger.info("prod store submitted for purge  in Batch:") 
+                                    time.sleep(5)  
+                                purgeDetail.append({"stage":"prod","group_id":group["group_id"],"group_name":group['group_name'],"storeCount":len(stores),"message":"Stores submitted for purge in batch.","code":0})                    
                             else:
                                 logger.info("no prod store to purge...") 
+                                purgeDetail.append({"stage":"prod","group_id":group["group_id"],"group_name":group['group_name'],"storeCount":len(stores),"message":"no active store to purge.","code":0})
                         else:
                             error_code=stores_resp['error_code']
                             res_json= resHandler.GetErrorResponseJSON(error_code,None)
-                            logger.info("Error found while get prod stores res_json="+str(res_json))   
+                            logger.info("Error found while get prod stores res_json="+str(res_json))  
+                            error_message=res_json["errorList"]["message"]
+                            purgeDetail.append({"stage":"prod","group_id":group["group_id"],"group_name":group['group_name'],"storeCount":0,"message":error_message,"code":error_code})   
 
                         stores_resp=app_client.GetTestStores(group['group_id'],region)        
                         if stores_resp['status']== True:           
@@ -56,43 +65,61 @@ def lambda_handler(event, context):
                                     delete_batch(client_1,batch,event) 
                                     logger.info("test store submitted for purge in Batch :")  
                                     time.sleep(5)  
+                                purgeDetail.append({"stage":"test","group_id":group["group_id"],"group_name":group['group_name'],"storeCount":len(stores),"message":"Stores submitted for purge in batch.","code":0})   
                             else:
                                 logger.info("no test store to purge...") 
+                                purgeDetail.append({"stage":"test","group_id":group["group_id"],"group_name":group['group_name'],"storeCount":len(stores),"message":"no active store to purge.","code":0 })   
                         else:
                             error_code=stores_resp['error_code']
-                            res_json= resHandler.GetErrorResponseJSON(error_code,None)
+                            res_json= resHandler.GetErrorResponseJSON(error_code,None)                            
                             logger.info("Error found while get test stores res_json="+str(res_json)) 
+                            error_message=res_json["errorList"]["message"]
+                            purgeDetail.append({"stage":"test","group_id":group["group_id"],"group_name":group['group_name'],"storeCount":0,"message":error_message,"code":error_code })   
                     else:
-                        logger.info("SKIP DAILY_PURGE not set for Group_id :"+str(group['group_id']))         
-                 
-        else:
+                        logger.info("SKIP DAILY_PURGE not set for Group_id :"+str(group['group_id']))  
+                        purgeDetail.append({"group_id":group["group_id"],"group_name":group['group_name'],"message":"DAILY_PURGE not Setup","code":-1 })       
+           
+           
+        else:           
+            
             error_code=grp_resp['error_code']
             res_json= resHandler.GetErrorResponseJSON(error_code,None) 
-            logger.info("Error found while get groups res_json="+str(res_json))    
+            logger.info("Error found while get groups res_json="+str(res_json))  
+            error_message=res_json["errorList"]["message"]
+            purgeDetail.append({"message":error_message,"code":error_code, })  
 
-         
+        
+        purge_table_data={"purge_table_summary":purgeDetail,"operation_status":status}    
+        summary_list.append(purge_table_data)   
+        purgeQueueDetail=[] 
+        status="SUCCESS"
         sqs_resp=purge_queue(request_queue,region)
         if sqs_resp['status']== True:
               logger.info("Queue: "+str(request_queue)+" Purge completed, wait for next 5 seconds")
               time.sleep(5)
         else:
               logger.info("Queue: "+str(request_queue)+" Not Purge sqs_resp:"+str(sqs_resp))
-        
+              status="ERROR"
+        purgeQueueDetail.append({"queue":request_queue,"purge_data":sqs_resp})
         request_queue="TEST_"+request_queue       
         sqs_resp=purge_queue(request_queue,region)
         if sqs_resp['status']== True:
               logger.info("Queue: "+str(request_queue)+" Purge completed, wait for next 5 seconds")
+               
               time.sleep(5)
         else:
               logger.info("Queue: "+str(request_queue)+" Not Purge sqs_resp:"+str(sqs_resp))
+              status="ERROR"
+        purgeQueueDetail.append({"queue":request_queue,"purge_data":sqs_resp})
         
-        request_queue=event['RESPONSE_QUEUE_NAME']        
+        """ request_queue=event['RESPONSE_QUEUE_NAME']        
         sqs_resp=purge_queue(request_queue,region)
         if sqs_resp['status']== True:
               logger.info("Queue: "+str(request_queue)+" Purge completed,wait for next 5 seconds")
               time.sleep(5)
         else:
               logger.info("Queue: "+str(request_queue)+" Not Purge sqs_resp:"+str(sqs_resp))
+        purgeQueueDetail.append({"queue":request_queue,"purge_data":sqs_resp})        
        
         request_queue="TEST_"+request_queue
         sqs_resp=purge_queue(request_queue,region)
@@ -100,16 +127,49 @@ def lambda_handler(event, context):
               logger.info("Queue: "+str(request_queue)+" Purge completed..")
         else:
               logger.info("Queue: "+str(request_queue)+" Not Purge sqs_resp:"+str(sqs_resp))
+        purgeQueueDetail.append({"queue":request_queue,"purge_data":sqs_resp})   """
 
+        
+        purge_queue_data={"purge_queue_summary":purgeQueueDetail,"operation_status":status}   
+        summary_list.append(purge_queue_data)   
         s3=S3Manager(region)
-        s3.delete_all_objects_from_s3_folder(bucket_name='epde-data-files',folderPrefix="data_files/")  
-        res_json={"message":"Purge Process completed...."}
-
+        s3.delete_all_objects_from_s3_folder(bucket_name='epde-data-files',folderPrefix="data_files/")        
+        res_json={
+                    "responseCode": -1,"errorList": [
+                        {"message":"Purge Process completed.",
+                        "code":0
+                        }
+                    ]
+                }
+        purge_s3_data={"purge_s3_data_file_summary":{"message":"Purge files at S3::epde-data-files/data_files/ ","code":0},"operation_status":status} 
+        summary_list.append(purge_s3_data)  
+        status="SUCCESS" 
         return resHandler.GetAPIResponse(res_json) 
     except Exception as e:
+            status="ERROR" 
             logger.error("error occured in lambda_handler",True)
             res_json= resHandler.GetErrorResponseJSON(313,None)
             return resHandler.GetAPIResponse(res_json) 
+    finally:
+        LogErrorInCloudWatch(context=context,requestStart=requestStart,res_json=res_json,status=status)
+         
+def LogErrorInCloudWatch(context,requestStart,res_json,status):
+    try:        
+        aws_account_id = context.invoked_function_arn.split(":")[4]            
+        logEvent={
+                "instance" :str(aws_account_id),
+                "app":"EPDE-JOB",
+                "jobName" :"Purge_Job",
+                "status": status,
+                "requestTime":requestStart.strftime("%Y-%m-%dT%H:%M:%S%z"),                        
+                "message": res_json["errorList"]["message"],
+                "code": res_json["errorList"]["code"],
+                "responseCode":-1                
+        } 
+        cwLogger= CloudWatchLogger()    
+        cwLogger.DoCloudWatchLog('epde/epdejobs',logEvent)
+    except:
+        logger.error("error occured DoCloudWatchLog in lambda_handler",True)      
    
 def purge_queue(QueueName,region):        
         try:

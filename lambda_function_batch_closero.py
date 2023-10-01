@@ -31,6 +31,7 @@ def lambda_handler(event, context):
     resHandler=ResponseHandler()
     auth_json=None
     file_id=None  
+    root_file_id=None  
     message="NOT_POSTED"
     eastern=pytz.timezone('US/Eastern')  
     requestStart = datetime.now().astimezone(eastern)
@@ -41,6 +42,7 @@ def lambda_handler(event, context):
     tableperstore_post=1             
     Is_WaitForResponse=False
     payment_request=None
+    batch_transactions=[]
     try:
             requestBody_str=event['body'] 
             payment_request = json.loads(requestBody_str)  
@@ -81,6 +83,7 @@ def lambda_handler(event, context):
                     att={"fileId": file_id} 
                     validateResp1.update(att)                             
                 res_json= validateResp1
+                root_file_id=file_id
                 return resHandler.GetAPIResponse(res_json)     
             store_detail=validateResp['store_detail']  
             ro_detail_list=validateResp['ro_detail_list']
@@ -94,7 +97,7 @@ def lambda_handler(event, context):
                 return resHandler.GetAPIResponse(res_json)     
             
             #//request created...
-            file_id=save_resp['file_id'] 
+            file_id=save_resp['file_id']              
             #Loop each request in queue:
             sqs= SQSManager(QueueName= queueNM,region=region,MaxMsgCount=msg_count,waitTimeInSecond=wait_time)           
             batchCloseRORequestList=save_resp['batchclosero_request']
@@ -105,9 +108,10 @@ def lambda_handler(event, context):
             res_json=batchclosero_response_json
             att={"fileId": root_file_id} 
             res_json.update(att)
-            post_manager=PostManger()
-            
+            post_manager=PostManger()            
             #for Loop 
+           
+            isAnyOneSuccess=False
             for batchCloseRORequest in batchCloseRORequestList:
                 res_json_inner=""
                 validateRespInner={'root_file_id':root_file_id}
@@ -115,16 +119,24 @@ def lambda_handler(event, context):
                 validateRespInner['payment_response']=batchCloseROResponseList[counter]
                 validateRespInner['ro_detail']=ro_detail_list[counter]
                 validateRespInner['store_detail']=store_detail
-                counter=counter+1                           
-               
-                pay_obj= post_manager.buildPaymentObject(validateRespInner,store_code,"IN_QUEUE",req_ts,req_ts,Is_WaitForResponse)         
-                save_resp_inner=post_manager.SavePostPayment(pay_obj)               
+                counter=counter+1                        
                 
+                file_id=None 
+                
+                pay_obj= post_manager.buildPaymentObject(validateRespInner,store_code,"IN_QUEUE",req_ts,req_ts,Is_WaitForResponse)               
+                ro_status=pay_obj['ro_status'] 
+                ro_number=pay_obj['document_id'] 
+                total_amount_due=pay_obj['total_amount_due']
+
+                save_resp_inner=post_manager.SavePostPayment(pay_obj)               
                 if save_resp_inner['status']== False:  
                    logger.debug("Error while saving Payment Request in DB...")
                    error_code=save_resp_inner['error_code']
                    res_json_inner= resHandler.GetErrorResponseJSON(error_code,auth_json)
                    logger.error("Error while saving Payment Request in DB...res_json_inner="+str(res_json_inner))
+                   err_message=res_json_inner["errorList"]["message"]                    
+                   batch_transaction={"ro_number":ro_number,"fileId":None,"status":"NOT_POSTED","message":err_message,"code":error_code,"ro_status":ro_status,"totalAmountDue":total_amount_due} 
+                   batch_transactions.append(batch_transaction)
                    continue
                 
                 #//request created...
@@ -136,7 +148,10 @@ def lambda_handler(event, context):
                     error_code=sqs_resp['error_code']
                     res_json_inner= resHandler.GetErrorResponseJSON(error_code,auth_json)
                     post_manager.UpdatePostPayment(store_code,save_resp_inner['file_id'],"NOT_POSTED",res_json_inner)                   
-                    logger.error("Error while sending Payment Request in SQS...res_json_inner="+str(res_json_inner))    
+                    logger.error("Error while sending Payment Request in SQS...res_json_inner="+str(res_json_inner))
+                    err_message=res_json_inner["errorList"]["message"]                    
+                    batch_transaction={"ro_number":ro_number,"fileId":None,"status":"NOT_POSTED","message":err_message,"code":error_code,"ro_status":ro_status,"totalAmountDue":total_amount_due} 
+                    batch_transactions.append(batch_transaction)
                     continue
                 #//request sent to queue and not waiting for response.                                                            
                 res_json_inner=validateRespInner['payment_response'] 
@@ -145,7 +160,10 @@ def lambda_handler(event, context):
                 logger.debug("RESPONSE FOUND ...Response JSON:"+str(res_json_inner))
                 ro_detail=validateRespInner['ro_detail'] 
                 logger.debug("store_detail JSON:"+str(store_detail))
-                logger.debug("ro_detail JSON:"+str(ro_detail))                      
+                logger.debug("ro_detail JSON:"+str(ro_detail))                                  
+                batch_transaction={"ro_number":ro_number,"fileId":file_id,"status":"IN_QUEUE","ro_status":ro_status,"totalAmountDue":total_amount_due} 
+                batch_transactions.append(batch_transaction)   
+                isAnyOneSuccess=True                 
                 if post_manager.isRetryAllow(store_detail,ro_detail):
                     close_all_RO_flag=store_detail['close_all_RO_flag']
                     retry_wait_time_in_min=int(store_detail['retry_wait_interval_min'])
@@ -167,7 +185,17 @@ def lambda_handler(event, context):
                     logger.debug("after start stepfunction:")
                 else:
                     logger.info("Retry rejected: Request timeout/ Retry not activated..Store-Code:"+store_detail['store_code']+",file_id:"+file_id)                  
-            #End For Loop                  
+            #End For Loop 
+            if isAnyOneSuccess==True:
+                status="SUCCESS"  
+            else:
+                res_json={
+                        "responseCode": -1,"errorList": [
+                            {
+                            "code": 313,
+                            "message": "Internal API Error. Please try again later or call the IVSG Technical Support for a status and ETA"
+                            }
+                        ]}                                  
             return resHandler.GetAPIResponse(res_json)
     except Exception as e:
              #save not posted request 
@@ -203,7 +231,7 @@ def lambda_handler(event, context):
                     if 'autoCloseRO' in payment_request:
                             autoCloseRO= payment_request['autoCloseRO'] 
 
-               apiParameters={"autoCloseRO":autoCloseRO,"requestCount":len(paymentsList) ,"queueName":queueNM, "fileId":file_id}          
+               apiParameters={"autoCloseRO":autoCloseRO,"requestCount":len(paymentsList) ,"queueName":queueNM, "fileId":root_file_id,"trans_detail":batch_transactions}          
                logEvent={
                     "instance" :str(aws_account_id),
                     "app":"EPDE-API-GATEWAY",

@@ -2,7 +2,8 @@
  
 import io
 
-import pytz 
+import pytz
+from EPDE_CloudWatchLog import CloudWatchLogger 
 from EPDE_Error import ErrorHandler
 from EPDE_Logging import LogManger
 from EPDE_Response import ResponseHandler
@@ -27,6 +28,11 @@ def export_excel(df):
 def lambda_handler(event, context):
     res_json=""
     resHandler=ResponseHandler()
+    eastern=pytz.timezone('US/Eastern')  
+    requestStart = datetime.now().astimezone(eastern)
+    status="ERROR"  
+    stage="prod"
+    responseCode=-1   
     try:
         _moduleNM="EPDE_Lambda"
         _functionNM="lambda_handler"
@@ -46,6 +52,7 @@ def lambda_handler(event, context):
         if store_grp_resp['status']:
             store_groups=store_grp_resp['items']
             for group in store_groups:
+                extraInfo=[]
                 group_id=group['group_id']
                 group_name=group['group_name']
                 stores_resp=None
@@ -72,7 +79,7 @@ def lambda_handler(event, context):
                             date_utc=date_eastern.astimezone(utc)
                             create_date=str(date_utc.timestamp())                    
                             ro_state_resp= post_mgr.GetPostPaymentRereconciliationReport(store_code,create_date,tableperstore) 
-                            if ro_state_resp['status']:
+                            if ro_state_resp['status']:                                                       
                                 report_summary=ro_state_resp['report_summary']
                                 report_summary_list.append(report_summary)
                                 excel_doc=excelUpdateDT(ro_state_resp['excel_doc'] )                          
@@ -81,17 +88,46 @@ def lambda_handler(event, context):
                                 excel_attachment={"excel_doc":excel_doc ,"excel_name":excelName}
                                 attachments.append(excel_attachment)                            
                             else:
-                                logger.debug("Error found in PostPayment Rereconciliation Report for store_code:"+store_code) 
-                        if len(report_summary_list)>0:
+                                logger.debug("Error found in PostPayment Rereconciliation Report for store_code:"+store_code)                                                    
+                                extraInfo.append({"store_code":store_code,"error":ro_state_resp})
+                        status="SUCCESS"
+                        responseCode=0  
+                        if len(report_summary_list)>0:                            
                             send_email_resp= send_email(group,report_summary_list,attachments,region,email_source,is_Test)
+                             
+                            if send_email_resp["status"]==False:
+                               responseCode=-1
+                               status="ERROR"   
                             logger.info("send email response:"+str(send_email_resp))
+                            extraInfo.append(send_email_resp)
                         else:
                             logger.info("email not send , No active stores in group:"+group_name)
-                    
+                        try:       
+                               
+                                aws_account_id = context.invoked_function_arn.split(":")[4]            
+                                logEvent={
+                                        "instance" :str(aws_account_id),
+                                        "app":"EPDE-JOB",
+                                        "stage":stage,            
+                                        "jobName" :"PostPaymentReconciliation_Email_Job",                                                                  
+                                        "group_id":group_id,     
+                                        "group_name":group_name,          
+                                        "status": status,
+                                        "requestTime":requestStart.strftime("%Y-%m-%dT%H:%M:%S%z"),                        
+                                        "responseCode":responseCode,
+                                        "extraInfo":extraInfo,
+                                        "summaryCount":len(report_summary_list),
+                                        "attachments":len(attachments)
+                                } 
+                                cwLogger= CloudWatchLogger()    
+                                cwLogger.DoCloudWatchLog('epde/epdejobs',logEvent)
+                        except:
+                                logger.error("error occured DoCloudWatchLog in lambda_handler",True) 
                         res_json={"message":"Send PostPayment Rereconciliation Report Alert successfully."}     
                     else:
                         error_code=stores_resp['error_code']
                         res_json= resHandler.GetErrorResponseJSON(error_code,None)
+                        LogErrorInCloudWatch1(stage=stage,context=context,requestStart=requestStart,res_json=res_json,group_id=group_id,group_name=group_name)
                 else:
                     logger.info("email not send , Alert is not active in group:"+group_name)
                 """ stores_resp=app_client.GetTestStores(group_id,region)         
@@ -128,11 +164,49 @@ def lambda_handler(event, context):
         else:
             error_code=store_grp_resp['error_code']
             res_json= resHandler.GetErrorResponseJSON(error_code,None)      
+            LogErrorInCloudWatch(stage=stage,context=context,requestStart=requestStart,res_json=res_json)
         return resHandler.GetAPIResponse(res_json) 
     except Exception as e:
             logger.error("error occured in lambda_handler",True)
             res_json= resHandler.GetErrorResponseJSON(313,None)
+            LogErrorInCloudWatch(stage=stage,context=context,requestStart=requestStart,res_json=res_json)
             return resHandler.GetAPIResponse(res_json) 
+def LogErrorInCloudWatch1(context,stage,requestStart,res_json,group_id,group_name):
+    try:        
+        aws_account_id = context.invoked_function_arn.split(":")[4]            
+        logEvent={
+                "instance" :str(aws_account_id),
+                "app":"EPDE-JOB",
+                "stage":stage,            
+                "jobName" :"PostPaymentReconciliation_Email_Job",
+                "status": "ERROR",
+                "group_id":group_id,     
+                "group_name":group_name,  
+                "requestTime":requestStart.strftime("%Y-%m-%dT%H:%M:%S%z"),                        
+                "extraInfo": res_json ,             
+                "responseCode":-1                
+        } 
+        cwLogger= CloudWatchLogger()    
+        cwLogger.DoCloudWatchLog('epde/epdejobs',logEvent)
+    except:
+        logger.error("error occured DoCloudWatchLog in lambda_handler",True)  
+def LogErrorInCloudWatch(context,stage,requestStart,res_json):
+    try:        
+        aws_account_id = context.invoked_function_arn.split(":")[4]            
+        logEvent={
+                "instance" :str(aws_account_id),
+                "app":"EPDE-JOB",
+                "stage":stage,            
+                "jobName" :"PostPaymentReconciliation_Email_Job",
+                "status": "ERROR",
+                "requestTime":requestStart.strftime("%Y-%m-%dT%H:%M:%S%z"),                        
+                "extraInfo": res_json ,             
+                "responseCode":-1                
+        } 
+        cwLogger= CloudWatchLogger()    
+        cwLogger.DoCloudWatchLog('epde/epdejobs',logEvent)
+    except:
+        logger.error("error occured DoCloudWatchLog in lambda_handler",True)  
 def myFunc(e):
       return e['store_code']
 def getTemaplate(table,create_dt,head_bg_color,body_bg_color,group_name):    

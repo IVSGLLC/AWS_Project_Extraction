@@ -1,5 +1,6 @@
 import io
-import pytz 
+import pytz
+from EPDE_CloudWatchLog import CloudWatchLogger 
 from EPDE_Error import ErrorHandler
 from EPDE_Logging import LogManger
 from EPDE_Response import ResponseHandler
@@ -24,10 +25,12 @@ def export_excel(df):
 def lambda_handler(event, context):
     res_json=""
     resHandler=ResponseHandler()
+    eastern=pytz.timezone('US/Eastern')  
+    requestStart = datetime.now().astimezone(eastern)   
+    status="ERROR" 
+    stage="prod" 
     try:
-        _moduleNM="EPDE_Lambda"
-        _functionNM="lambda_handler"
-        err_handler.appInfo(moduleNM=_moduleNM,functionNM=_functionNM)     
+        
         region=event['REGION']
         tableperstore=1
         tableperstore_post=1
@@ -35,7 +38,8 @@ def lambda_handler(event, context):
         if "IS_TEST" in event:   
            test=str(event["IS_TEST"])
            if test.lower()=='true':
-              is_Test=True        
+              is_Test=True  
+              stage="test"      
         email_source=event["EMAIL_SOURCE"]           
         app_client= AppClient()
         post_mgr=PostManger(region,tableperstore_post)
@@ -47,8 +51,12 @@ def lambda_handler(event, context):
                 group_name=group['group_name']
                 stores_resp=None
                 alerts=group['alerts']
+                report_summary_list=[]
+                attachments=[]
+                extraInfo=[]
                 if 'DAILY_BATCHCLOSERO_REPORT' in alerts:   
                     if not is_Test:
+                       
                         stores_resp=app_client.GetStores(group_id,region)
                     else:
                         stores_resp=app_client.GetTestStores(group_id,region)    
@@ -57,6 +65,7 @@ def lambda_handler(event, context):
                         stores=stores_resp['items']
                         report_summary_list=[]
                         attachments=[]
+                        extraInfo=[]
                         for store in stores:
                             store_code=store['store_code'] 
                             if 'batchCloseRO' in store and store['batchCloseRO']==True:  
@@ -77,29 +86,109 @@ def lambda_handler(event, context):
                                     attachments.append(excel_attachment)                            
                                 else:
                                     logger.debug("Error found in BatchCloseRO Report for store_code:"+store_code) 
+                                    extraInfo.append({"store_code":store_code,"error":ro_state_resp})
+
                             else:
                                     logger.info("batchCloseRO Not true for store_code:"+store_code) 
+                                    #extraInfo.append({"store_code":store_code,"error":"batchCloseRO is not True."})
+
+
                         if len(report_summary_list)>0:
                             send_email_resp= send_email(group,report_summary_list,attachments,region,email_source,is_Test)
                             logger.info("send email response:"+str(send_email_resp))
+                            errorMessage=  ""
+                            responseCode= 0  
+                            errorCode=0
+                            status="SUCCESS"
+                            extraInfo.append(send_email_resp)
                         else:
-                            logger.info("email not send , No active stores in group:"+group_name)
-                    
-                        res_json={"message":"Send BatchCloseRO Alert successfully."}     
+                           status="ERROR"
+                           responseCode= -1   
+                           errorCode=-1
+                           errorMessage=  "BatchCloseRO Email Not Sent. Report summary list is blank/error in GetBatchCloseROReport"
+                           logger.info("email not send , No active stores in group:"+group_name)
+                            
+                        try:        
+                                aws_account_id = context.invoked_function_arn.split(":")[4]            
+                                logEvent={
+                                        "instance" :str(aws_account_id),
+                                        "app":"EPDE-JOB",
+                                        "stage":stage,            
+                                        "jobName" :"BatchCloseRO_Report_JOb",                                                                  
+                                        "group_id":group_id,     
+                                        "group_name":group_name,          
+                                        "status": status,
+                                        "requestTime":requestStart.strftime("%Y-%m-%dT%H:%M:%S%z"),                        
+                                        "message": errorMessage,
+                                        "code": errorCode,
+                                        "responseCode":responseCode,
+                                        "extraInfo":extraInfo,
+                                        "summaryCount":len(report_summary_list),
+                                        "attachments":len(attachments)
+                                } 
+                                cwLogger= CloudWatchLogger()    
+                                cwLogger.DoCloudWatchLog('epde/epdejobs',logEvent)
+                        except:
+                                logger.error("error occured DoCloudWatchLog in lambda_handler",True) 
+                        res_json={"message":"Send BatchCloseRO Alert successfully."}   
+                        
                     else:
                         error_code=stores_resp['error_code']
                         res_json= resHandler.GetErrorResponseJSON(error_code,None)
+                        LogErrorInCloudWatch1(stage=stage,context=context,requestStart=requestStart,res_json=res_json,group_id=group_id,group_name=group_name)
                 else:
                     logger.info("email not send ,BACTCH CLOSE RO EMAIL Alert is not active in group:"+group_name)
                 
         else:
             error_code=store_grp_resp['error_code']
-            res_json= resHandler.GetErrorResponseJSON(error_code,None)      
+            res_json= resHandler.GetErrorResponseJSON(error_code,None) 
+            LogErrorInCloudWatch(stage=stage,context=context,requestStart=requestStart,res_json=res_json)     
         return resHandler.GetAPIResponse(res_json) 
     except Exception as e:
             logger.error("error occured in lambda_handler",True)
             res_json= resHandler.GetErrorResponseJSON(313,None)
+            LogErrorInCloudWatch(stage=stage,context=context,requestStart=requestStart,res_json=res_json)
             return resHandler.GetAPIResponse(res_json) 
+
+def LogErrorInCloudWatch1(context,stage,requestStart,res_json,group_id,group_name):
+    try:        
+        aws_account_id = context.invoked_function_arn.split(":")[4]            
+        logEvent={
+                "instance" :str(aws_account_id),
+                "app":"EPDE-JOB",
+                "stage":stage,            
+                "jobName" :"BatchCloseRO_Report_JOb",
+                "group_id":group_id,     
+                "group_name":group_name,    
+                "status": "ERROR",
+                "requestTime":requestStart.strftime("%Y-%m-%dT%H:%M:%S%z"),                        
+                "message": res_json["errorList"]["message"],
+                "code": res_json["errorList"]["code"],
+                "responseCode":-1                
+        } 
+        cwLogger= CloudWatchLogger()    
+        cwLogger.DoCloudWatchLog('epde/epdejobs',logEvent)
+    except:
+        logger.error("error occured DoCloudWatchLog in lambda_handler",True)       
+def LogErrorInCloudWatch(context,stage,requestStart,res_json):
+    try:        
+        aws_account_id = context.invoked_function_arn.split(":")[4]            
+        logEvent={
+                "instance" :str(aws_account_id),
+                "app":"EPDE-JOB",
+                "stage":stage,            
+                "jobName" :"BatchCloseRO_Report_JOb",
+                "status": "ERROR",
+                "requestTime":requestStart.strftime("%Y-%m-%dT%H:%M:%S%z"),                        
+                "message": res_json["errorList"]["message"],
+                "code": res_json["errorList"]["code"],
+                "responseCode":-1                
+        } 
+        cwLogger= CloudWatchLogger()    
+        cwLogger.DoCloudWatchLog('epde/epdejobs',logEvent)
+    except:
+        logger.error("error occured DoCloudWatchLog in lambda_handler",True)      
+
 def myFunc(e):
       return e['store_code']
 def getTemaplate(table,create_dt,head_bg_color,body_bg_color,group_name):    

@@ -82,6 +82,7 @@ class ErrorHandler(object):
         384: "Missing #args-1 in Request",
         385: "Invalid partitionKey",
         386: "Missing input in Request,Please provide at least one input [vin|plan with fromDate and toDate | fromDate and toDate", 
+        387: "Error in BatchCloseRO Report", 
        
     }
     @classmethod
